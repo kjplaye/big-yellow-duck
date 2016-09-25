@@ -409,7 +409,7 @@ class lp_model:
             new_data = data * lp_model.hamming_window[len(data)]
 
             #Find auto correlations
-            self.ac = numpy.convolve(new_data,numpy.concatenate((new_data,numpy.zeros(self.order)))[::-1])
+            self.ac = numpy.correlate(numpy.concatenate((new_data,numpy.zeros(self.order))),new_data)
             self.ac2lpc()
             self.lpc2cepst()
 
@@ -451,7 +451,7 @@ pulse_energy = math.sqrt(sum(pulse_160 * pulse_160))
 class excitation_model:
     def __init__(self, data=None):
         if isinstance(data,pcm_array):
-            auto_c = numpy.convolve(data,numpy.concatenate((data,numpy.zeros(len(data))))[::-1])
+            auto_c = numpy.correlate(numpy.concatenate((data,numpy.zeros(len(data)))),data)
 
             maxi = 20
             the_max = 0;
