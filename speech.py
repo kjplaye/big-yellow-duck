@@ -12,6 +12,7 @@ from ctypes import *
 
 PITCH_NOISE_RATIO = 1.0
 PULSE_SHAPE = 1.3
+DEFAULT_PULSE_MULT = 5.0
 
 numpy_ptr = numpy.ctypeslib.ndpointer(dtype=numpy.float64,ndim=1,flags='C_CONTIGUOUS')
 
@@ -472,11 +473,11 @@ class excitation_model:
     def __repr__(self):
         return 'excitation_model with gain = %f, pitch = %f, gain_on_pitch %f' % (self.gain,self.pitch,self.gain_on_pitch)
 
-    def synthesize(self,size = 40,time_since_last_pulse = 0):
+    def synthesize(self,pulse_mult = DEFAULT_PULSE_MULT,size = 40,time_since_last_pulse = 0):
         ans = (c_double * size)()
         tslp = c_double(time_since_last_pulse)
 
-        speech_so.synth(ans,size,pointer(tslp),self.gain,8000.0 / self.pitch,self.gain_on_pitch,pulse_energy)
+        speech_so.synth(ans,size,pointer(tslp),self.gain,8000.0 / self.pitch,pulse_mult * self.gain_on_pitch,pulse_energy)
         ans = pcm(ans[:])
         return ans, tslp.value
 
@@ -507,7 +508,6 @@ class vocoder(list):
                 f = lp_m.vocal_tract_filter().inverse()
                 if last_filter:
                     f.chain_memory(last_filter)
-
                 residual[a:b] = new_data[a:b]
                 residual[a:b] = f * residual[a:b]
                 self.append([lp_m,None])
@@ -524,12 +524,12 @@ class vocoder(list):
         else:
             list.__init__(self,data)
             
-    def synthesize(self):
+    def synthesize(self,pulse_mult = DEFAULT_PULSE_MULT):
         synth = pcm([])
         last_filter = None
         tslp = 0
         for frame in self:
-            ex,tslp = frame[1].synthesize(size = self.frame_step,time_since_last_pulse = tslp)
+            ex,tslp = frame[1].synthesize(pulse_mult = pulse_mult,size = self.frame_step,time_since_last_pulse = tslp)
             f  = frame[0].vocal_tract_filter()
             if last_filter:
                 f.chain_memory(last_filter)
