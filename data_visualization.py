@@ -3,18 +3,12 @@ import tempfile
 import speech
 
 from imagesc import imagesc
-#def imagesc(x):
-#    if type(x) == str:
-#        os.system('imagesc '+x)
-#    else:
-#        f = tempfile.NamedTemporaryFile()
-#        for L in x:
-#            f.write(' '.join(map(str,L)) + '\n')
-#        f.flush()
-#        os.system('imagesc '+f.name)
-#        f.close()
+from ggobi import *
 
 def plotn(x):
+    """
+    Hopefully we get a better version soon
+    """
     if type(x) == str:
         os.system('plotn '+x)
     else:
