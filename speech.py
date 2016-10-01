@@ -16,7 +16,8 @@ DEFAULT_PULSE_MULT = 5.0
 
 numpy_ptr = numpy.ctypeslib.ndpointer(dtype=numpy.float64,ndim=1,flags='C_CONTIGUOUS')
 
-speech_so = cdll.LoadLibrary('/home/kevin/PYTHON_CODE/_speech.so')
+my_path = os.path.dirname(os.path.abspath(__file__))
+speech_so = cdll.LoadLibrary(my_path + '/_speech.so')
 
 speech_so.zero_filt_mul.restype = None
 speech_so.zero_filt_mul.argtypes = [POINTER(c_double),POINTER(c_double),numpy_ptr,c_int,c_int]
@@ -144,7 +145,8 @@ class pcm_array(numpy.ndarray):
         """
         f = tempfile.NamedTemporaryFile()
         self.write_16t(f)
-        cmd_line = '/home/kevin/bin/wview %s' % f.name;
+        f.flush()
+        cmd_line = my_path + ('/wview %s' % f.name);
         os.system(cmd_line);
         f.close()
     def show2(self):

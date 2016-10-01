@@ -20,8 +20,5 @@ def plotn(x):
         f.close()
 
 def wview(x):
-    if type(x) == str:
-        os.system('wview '+x)
-    else:
-        speech.pcm(x).show();
+    speech.pcm(x).show();
     
