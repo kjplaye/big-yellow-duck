@@ -9,7 +9,9 @@
 #define NULL_COLOR 0x305050
 #define ZOOM_RATIO 1.2
 #define PAN_RATIO 0.3
-#define COLOR_MODES 4
+#define COLOR_MODES 5
+
+#define GET_MAX(a,b) (((a)>(b)) ? (a) : (b))
 
 #define point(x,y) pnt[(int)(x)+(int)(y)*SCREEN_WIDTH]
 SDL_Surface *screen;
@@ -53,7 +55,7 @@ void screen_init(void)
 int imagesc(double * data, long long data_len, long long width, long long frames)
 {
   long long i;
-  double max, min, amp, power;
+  double max, min, amp, power, temp;
   SDL_Event event;
   double win_x0 = 0;
   double win_y0 = 0;
@@ -152,7 +154,22 @@ int imagesc(double * data, long long data_len, long long width, long long frames
 			g = 255 * (1 - amp);
 			b = 255 * (1 - amp);
 			break;
-
+		      case 4:
+			r=g=b=0;
+			temp = GET_MAX(max,-min);
+			temp *= 1.1;
+			if (data[zz] > 0)
+			  {
+			    amp = (data[zz] - 0) / temp;
+			    amp = pow(amp,power);
+			    r = 255 * amp;
+			  }
+			else
+			  {
+			    amp = (0-data[zz]) / temp;
+			    amp = pow(amp,power);
+			    b = 255 * amp;
+			  }
 			break;
 		      }
 		    point(x,y) = (r << 16) ^ (g << 8) ^ b;

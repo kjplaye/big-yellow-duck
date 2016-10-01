@@ -1,9 +1,11 @@
 import numpy
 from ctypes import *
 from basic_util import dim
-from my_path import my_path
+import os
 
-_imagesc = cdll.LoadLibrary(my_path + '_imagesc.so')
+my_path = os.path.dirname(os.path.abspath(__file__))
+_imagesc = cdll.LoadLibrary(my_path + '/_imagesc.so')
+
 def imagesc(L):
     """
     Example:
