@@ -293,7 +293,7 @@ int imagesc(double * data, long long data_len, long long width, long long frames
 		    }
 		  if (last_x >= 0)
 		    {		     
-		      printf("data[%lld][%lld] = %f (frame %lld)\n",last_y,last_x,data[zz],frame_number);
+		      printf("data[%lld][%lld] = %f (index %lld) (frame %lld)\n",last_y,last_x,data[zz],zz,frame_number);
 		    }
 		  else
 		    printf("Nothing here\n");
@@ -323,7 +323,13 @@ int imagesc(double * data, long long data_len, long long width, long long frames
 		  break;
 		case SDL_BUTTON_MIDDLE:
 		  printf("PRESS RETURN...laptop has ackward middle or something\n");
-		  break;		  
+		  break;
+		case SDL_BUTTON_WHEELUP:
+		  alpha = 1/ZOOM_RATIO;
+           	  break;
+		case SDL_BUTTON_WHEELDOWN:
+		  alpha = ZOOM_RATIO;
+           	  break;
 		}
 	      v1 = (double)event.button.x*(win_x1-win_x0)+SCREEN_WIDTH*win_x0;
 	      v2 = (win_x1-win_x0)*alpha;
