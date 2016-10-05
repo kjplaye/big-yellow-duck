@@ -12,6 +12,19 @@ def imagesc(L):
     >>> import math
     >>> M = [[math.sin(x*y*0.1) for x in xrange(100)] for y in xrange(100)]
     >>> imagesc(M)
+
+    KEYS:
+       Q             : Quit
+       S             : Zoom Standard
+       C             : Change Color Mode
+       PgUp or PgDn  : Horizontal Zoom
+       Home or End   : Vertical Zoom
+       + or -        : Change Color Intensity
+       [ or ]        : Change Width
+       , or .        : Change Frames
+       Arrow Keys    : Pan
+       Return        : Print data index and value
+       Mouse Buttons : Zoom     
     """
     if dim(L) == 2:
         x = numpy.array(L,dtype = numpy.float64)
