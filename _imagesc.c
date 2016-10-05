@@ -246,10 +246,12 @@ int imagesc(double * data, long long data_len, long long width, long long frames
 		  width++;
 		  if (width > data_len) width = data_len;
 		  redraw_flag = 1;
+		  printf("width = %lld\n",width);
 		  break;
 		case SDLK_RIGHTBRACKET:
 		  width--;
 		  if (width < 1) width = 1;
+		  printf("width = %lld\n",width);
 		  redraw_flag = 1;
 		  break;
 		case SDLK_LEFT:
@@ -300,10 +302,12 @@ int imagesc(double * data, long long data_len, long long width, long long frames
 		  break;
 		case SDLK_COMMA:
 		  if (--frame_number<0) frame_number = 0;
+		  printf("Frame = %lld\n",frame_number);
 		  redraw_flag = 1;
 		  break;
 		case SDLK_PERIOD:
 		  if (++frame_number>=frames) frame_number = frames - 1;
+		  printf("Frame = %lld\n",frame_number);
 		  redraw_flag = 1;
 		  break;
 		}
