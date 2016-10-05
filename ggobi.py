@@ -3,6 +3,7 @@ import os
 from subprocess import Popen, PIPE
 import xml.etree.cElementTree
 from collections import defaultdict
+import numpy as np
 
 def ggobi(X, cl = None, smallest_glyph = 'auto'):
     """
@@ -88,4 +89,4 @@ def ggobi(X, cl = None, smallest_glyph = 'auto'):
             if s not in label:
                 label[s] = num_labels
                 num_labels+=1
-        return [label[s] for s in S]
+        return np.array([label[s] for s in S])
