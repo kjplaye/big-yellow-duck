@@ -5,7 +5,8 @@ import math
 import tempfile
 import os
 import random
-import gnuplot
+#import gnuplot
+#TODO update gnuplot --> pylab
 import exceptions
 import ossaudiodev
 from ctypes import *
