@@ -4,8 +4,6 @@
 #include <stdlib.h>
 #include <complex.h>
 
-#define SCREEN_WIDTH 800
-#define SCREEN_HEIGHT 600
 #define MAX_FFT_BITS 10
 #define MIN_FFT_BITS 4
 #define BUFFER_SIZE (1<<MAX_FFT_BITS)
@@ -61,6 +59,9 @@ int color_scheme = CS_BLACK_ON_WHITE;
 #define point(x,y) pnt[(int)(x)+(int)(y)*SCREEN_WIDTH]
 SDL_Surface *screen;
 unsigned * pnt;
+
+int SCREEN_WIDTH = 800;
+int SCREEN_HEIGHT = 600;
 
 int pal_colors = 6;
 double pal[7][3] = {
@@ -475,18 +476,14 @@ void apply_pole_filter(struct filter_t * filt, double * buffer, int size)
 }
 
 
-int main(int argc,char ** argv)
+void wview(double * buffer, long size)
 {
-  FILE * fp, * fp_temp;
-
-  short * buffer;
   SDL_Event event;
-  int i,j,k,flag,x,y,old_y,r,g,b,c;
-  long size, max;
+  long i,j,k,flag,x,y,old_y,r,g,b,c;
+  double max,min;
   long start,end,new_start,new_end;
 
   int toggle = 1;
-  int auto_scale = 0;
   int line_flag = 0;
   int root_flag = 0;
   int grid_flag = 0;
@@ -520,28 +517,12 @@ int main(int argc,char ** argv)
   double ahpf[3] = {0.946, -1.892, 0.946};
   double bhpf[3] = {1.0, -1.889033, 0.8948743};
 
+  if (size <= 0) return;
 
   screen_init();
   refresh();
   fft_init();
   window_init(window);
-
-  if (argc < 2) 
-    {
-      printf("Usage: wview S16_LE_file\n");
-      exit(1);
-    }
-  
-  if ((fp = fopen(argv[1],"r"))==NULL) {printf("Error opening file %s\n",argv[1]);exit(1);}
-
-  fseek(fp,0,SEEK_END);
-  size = ftell(fp)/2;
-  fseek(fp,0,SEEK_SET);
-
-  if ((buffer = malloc(sizeof(short)*size))==NULL) {printf("Out of memory\n");exit(1);}
-
-  if (fread(buffer,sizeof(short),size,fp)!=size) {printf("Error reading all %ld samples\n",size);exit(1);}
-  fclose(fp);
 
   start = 0;
   end = size;
@@ -549,6 +530,13 @@ int main(int argc,char ** argv)
   new_start = 0;
   new_end = size-1;
 
+  min = max = buffer[0];
+  for(i=0;i<size;i++)
+    {
+      if (buffer[i] > max) max = buffer[i];
+      if (buffer[i] < min) min = buffer[i];      
+    }
+  
   flag = 1;
   while(flag)
     {        
@@ -582,22 +570,11 @@ int main(int argc,char ** argv)
 	  //Begin Drawing
 	  switch(mode)
 	    {
-	    case MODE_TIME:	 
-	      if (auto_scale)
-		{
-		  max = 0;
-		  for(i=start;i<end;i++) 
-		    {
-		      if (abs(buffer[i]) > max) max = abs(buffer[i]);
-		    }
-		}
-	      else 
-		max = 32768;
-	      
+	    case MODE_TIME:	 	      
 	      for (i=start;i<end;i++) 
 		{
 		  x = ((i-start)*SCREEN_WIDTH)/(end-start);
-		  y = (((double)buffer[i]/max)+1)*SCREEN_HEIGHT/2;
+		  y = (1 - ((buffer[i] - min) / (max-min))) * SCREEN_HEIGHT;
 		  if (y<0) y=0;
 		  if (y>=SCREEN_HEIGHT) y = SCREEN_HEIGHT-1;
 		  point(x,y) = 0xffffff;
@@ -896,6 +873,12 @@ int main(int argc,char ** argv)
 	{
 	  switch(event.type)
 	    {
+	    case SDL_VIDEORESIZE:
+	      SCREEN_WIDTH = event.resize.w;
+	      SCREEN_HEIGHT = event.resize.h;
+	      screen_init();
+	      redraw_event = 1;
+	      break;
 	    case SDL_KEYDOWN:
 	      if (event.key.keysym.sym == SDLK_LEFTBRACKET) 
 		{
@@ -979,47 +962,6 @@ int main(int argc,char ** argv)
 		  if (++mode == MODES) mode=0;
 		  printf("Entering mode: %s\n",mode_string[mode]);
 		  redraw_event = 1;
-		}
-	      if (event.key.keysym.sym == SDLK_EQUALS) 
-		{
-		  printf("New S16_LE file?");
-		  scanf("%s",cmd_line);
-		  if ((fp = fopen(cmd_line,"r"))==NULL) {printf("Error opening file %s\n",cmd_line);}
-		  else
-		    {		      		      
-		      fseek(fp,0,SEEK_END);
-		      size = ftell(fp)/2;
-		      fseek(fp,0,SEEK_SET);
-		      
-		      if ((buffer = malloc(sizeof(short)*size))==NULL) {printf("Out of memory\n");exit(1);}
-		      
-		      if (fread(buffer,sizeof(short),size,fp)!=size) {printf("Error reading all %ld samples\n",size);exit(1);}
-		      fclose(fp);
-		      
-		      if (end > size) end = size;
-		      if (start > size) start = 0;
-
-		      if (new_end > size) new_end = size;
-		      if (new_start > size) new_start = 0;
-		      selection_event = 1;
-		      redraw_event = 1;
-		    }
-		}
-	      if (event.key.keysym.sym == SDLK_p) 
-		{
-		  if ((fp_temp = fopen(TEMP_FILE,"w"))==NULL)
-		    {
-		      printf("Error opening temp file %s\n",TEMP_FILE);
-		      exit(1);
-		    }
-		  if (fwrite(buffer + new_start,sizeof(short),new_end - new_start,fp_temp)!=new_end-new_start)
-		    {
-		      printf("Error writing to temp file %s\n",TEMP_FILE);
-		      exit(1);
-		    }
-		  fclose(fp_temp);
-		  sprintf(cmd_line,"aplay -t raw -f S16_LE -r 8000 %s 2> /dev/null",TEMP_FILE);
-		  system(cmd_line);
 		}
 	      if (event.key.keysym.sym == SDLK_c) 
 		{
@@ -1159,11 +1101,6 @@ int main(int argc,char ** argv)
 		  printf("high pass filter flag is now %d\n",hpf_flag);
 		  redraw_event = 1;
 		}
-	      if (event.key.keysym.sym == SDLK_a) 
-		{
-		  auto_scale = !auto_scale;
-		  redraw_event = 1;
-		}
 	      if (event.key.keysym.sym == SDLK_l) 
 		{
 		  line_flag = !line_flag;
@@ -1226,4 +1163,6 @@ int main(int argc,char ** argv)
 	    }	  
 	}
     }
+  
+  SDL_Quit();
 }  

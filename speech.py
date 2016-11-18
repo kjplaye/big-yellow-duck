@@ -144,12 +144,13 @@ class pcm_array(numpy.ndarray):
     def show(self):
         """ show using wview
         """
-        f = tempfile.NamedTemporaryFile()
-        self.write_16t(f)
-        f.flush()
-        cmd_line = my_path + ('/wview %s' % f.name);
-        os.system(cmd_line);
-        f.close()
+        raise ValueError('fix me')
+#        f = tempfile.NamedTemporaryFile()
+#        self.write_16t(f)
+#        f.flush()
+#        cmd_line = my_path + ('/wview %s' % f.name);
+#        os.system(cmd_line);
+#        f.close()
     def show2(self):
         """ show using gnuplot
         """
