@@ -14,4 +14,4 @@ _speech.so: _speech.c
 
 
 clean:
-	rm _imagesc.so wview plotn
+	rm _imagesc.so _wview.so plotn

@@ -14,14 +14,11 @@
 #define COLOR_THRESH 192
 #define MAX_ORDER 20
 
-#define MODES 5
+#define MODES 2
 #define MODE_TIME 0
-#define MODE_MULTI 1
-#define MODE_SPECT 2
-#define MODE_LP_ENV 3
-#define MODE_CEPST 4
+#define MODE_SPECT 1
 int mode = MODE_TIME;
-char mode_string[5][100] = {"Time","Spectrogram","Linear Predictive Envelope","Cepstrogram","Multi-mode"};
+char mode_string[2][100] = {"Time","Spectrogram"};
 
 #define VOWEL_ITER 8000
 #define VOWEL_ANIMATE 100
@@ -288,7 +285,7 @@ void pctolsp2(double * lpc,int m,double * freq,int * lspflag)
 
 
 double window_size = 128;
-double fft_scale = 0.01;
+double fft_scale = 100.0;
 int FFT_BITS = 10;
 
 complex A[(1<<MAX_FFT_BITS)];
@@ -476,11 +473,10 @@ void apply_pole_filter(struct filter_t * filt, double * buffer, int size)
 }
 
 
-void wview(double * buffer, long size)
+void wview(double * buffer, long size, int frames)
 {
   SDL_Event event;
   long i,j,k,flag,x,y,old_y,r,g,b,c;
-  double max,min;
   long start,end,new_start,new_end;
 
   int toggle = 1;
@@ -492,12 +488,13 @@ void wview(double * buffer, long size)
   
   int selection_event = 1;
   int redraw_event = 1;
-  int show_1sd = 0;
 
   char cmd_line[1000];
   double window[BUFFER_SIZE];
   double small_buffer[BUFFER_SIZE];
   double amp,mean,var,amp_max,phase,phase_offset;
+  double min[frames];
+  double max[frames];
 
   double ac[ORDER + 1];
   double lpc[ORDER];
@@ -510,6 +507,7 @@ void wview(double * buffer, long size)
   complex root[ORDER];
   int roots_found;
   double formant[2];
+  int frame = 0;
 
   // 2nd order Butterworth 100 Hz HPF:
   struct filter_t hpf_zero;
@@ -518,6 +516,7 @@ void wview(double * buffer, long size)
   double bhpf[3] = {1.0, -1.889033, 0.8948743};
 
   if (size <= 0) return;
+  if (frames <= 0) return;
 
   screen_init();
   refresh();
@@ -530,11 +529,14 @@ void wview(double * buffer, long size)
   new_start = 0;
   new_end = size-1;
 
-  min = max = buffer[0];
-  for(i=0;i<size;i++)
+  for(j=0;j<frames;j++)
     {
-      if (buffer[i] > max) max = buffer[i];
-      if (buffer[i] < min) min = buffer[i];      
+      min[j] = max[j] = buffer[size*j + 0];
+      for(i=0;i<size;i++)
+	{
+	  if (buffer[size*j + i] > max[j]) max[j] = buffer[size*j + i];
+	  if (buffer[size*j + i] < min[j]) min[j] = buffer[size*j + i];      
+	}
     }
   
   flag = 1;
@@ -574,7 +576,7 @@ void wview(double * buffer, long size)
 	      for (i=start;i<end;i++) 
 		{
 		  x = ((i-start)*SCREEN_WIDTH)/(end-start);
-		  y = (1 - ((buffer[i] - min) / (max-min))) * SCREEN_HEIGHT;
+		  y = (1 - ((buffer[size * frame + i] - min[frame]) / (max[frame]-min[frame]))) * SCREEN_HEIGHT;
 		  if (y<0) y=0;
 		  if (y>=SCREEN_HEIGHT) y = SCREEN_HEIGHT-1;
 		  point(x,y) = 0xffffff;
@@ -591,40 +593,8 @@ void wview(double * buffer, long size)
 		    }
 		  old_y = y;
 		}
-
-	      if (show_1sd)
-		{
-		  mean = 0;
-		  var = 0;
-		  x = 0;
-		  for(i=start;i<end;i++)
-		    {
-		      mean += buffer[i];
-		      var += (double)buffer[i]*(double)buffer[i];
-		    }
-		  mean /= (end-start);
-		  var /= (end-start);
-		  var -= mean*mean;
-		  
-		  y = (((double)mean/max)+1)*SCREEN_HEIGHT/2;
-		  if (y<0) y=0;
-		  if (y>=SCREEN_HEIGHT) y = SCREEN_HEIGHT-1;
-		  for(x=0;x<SCREEN_WIDTH;x++) point(x,y)^=0x808000;
-		  
-		  y = (((double)(mean - sqrt(var))/max)+1)*SCREEN_HEIGHT/2;
-		  if (y<0) y=0;
-		  if (y>=SCREEN_HEIGHT) y = SCREEN_HEIGHT-1;
-		  for(x=0;x<SCREEN_WIDTH;x++) point(x,y)^=0x808080;
-		  
-		  y = (((double)(mean + sqrt(var))/max)+1)*SCREEN_HEIGHT/2;
-		  if (y<0) y=0;
-		  if (y>=SCREEN_HEIGHT) y = SCREEN_HEIGHT-1;
-		  for(x=0;x<SCREEN_WIDTH;x++) point(x,y)^=0x808080;
-		}
 	      break;
 	    case MODE_SPECT:
-	    case MODE_LP_ENV:
-	    case MODE_CEPST:
 	      for(x=0;x<SCREEN_WIDTH;x++)
 		{
 		  i = x * (end - start) / SCREEN_WIDTH + start;
@@ -633,7 +603,7 @@ void wview(double * buffer, long size)
 		      if (i+j >= size)
 			small_buffer[j] = 0;
 		      else
-			small_buffer[j] = buffer[i+j];
+			small_buffer[j] = buffer[size * frame + i+j];
 		    }
 		  phase_offset = i+(window_size - 1)*0.5;		 
 		  if (hpf_flag) 
@@ -646,32 +616,8 @@ void wview(double * buffer, long size)
 		  for(j=0;j<BUFFER_SIZE;j++) fft_vect[j] = small_buffer[j] * window[j];
 		  switch (mode)
 		    {
-		    case MODE_LP_ENV:
-		      //Find auto correlations
-		      for(i=0;i<=ORDER;i++)
-			{
-			  ac[i] = 0;
-			  for(j=0;j<BUFFER_SIZE - i;j++) ac[i] += creal(fft_vect[j])*creal(fft_vect[j+i]);
-			}
-		      
-		      //Do Durbin recursion
-		      durbin(ac,lpc);
-		      
-		      fft_vect[0] = 1;
-		      for(i=0;i<ORDER;i++) fft_vect[i+1] = lpc[i];
-		      for(i=ORDER;i<BUFFER_SIZE;i++) fft_vect[i] = 0;
-		      
-		      fft();
-		      for(i=0;i<BUFFER_SIZE;i++) fft_vect[i] = 10000/fft_vect[i];
-		      break;
 		    case MODE_SPECT:
 		      fft();
-		      break;
-		    case MODE_CEPST:
-		      fft();
-		      for(i=0;i<BUFFER_SIZE;i++) fft_vect[i] = log(cabs(fft_vect[i]));
-		      fft();
-		      for(i=0;i<BUFFER_SIZE;i++) fft_vect[i] = 400*cabs(fft_vect[i]);
 		      break;
 		    }
 		  
@@ -739,106 +685,6 @@ void wview(double * buffer, long size)
 			}
 		    }
 		}
-	      break;
-	    case MODE_MULTI:
-	      for(x=0;x<SCREEN_WIDTH;x++)
-		{
-		  i = x * (end - start) / SCREEN_WIDTH + start;
-		  for(j=0;j<BUFFER_SIZE;j++) 
-		    {
-		      if (i+j >= size)
-			small_buffer[j] = 0;
-		      else
-			small_buffer[j] = buffer[i+j];
-		    }
-		  if (hpf_flag)
-		    {
-		      filter_init(&hpf_zero,2,ahpf);
-		      filter_init(&hpf_pole,2,bhpf);
-		      apply_zero_filter(&hpf_zero,small_buffer,BUFFER_SIZE);
-		      apply_pole_filter(&hpf_pole,small_buffer,BUFFER_SIZE);
-		    }
-		  for(j=0;j<BUFFER_SIZE;j++) fft_vect[j] = small_buffer[j] * window[j];
-		  //		  for(j=0;j<BUFFER_SIZE;j++) 
-		  //		    {
-		  //		      if (i+j >= size) 
-		  //			fft_vect[j] = 0;
-		  //		      else
-		  //			fft_vect[j] = buffer[i + j] * window[j];
-		  //		    }
-
-		  //Find auto correlations
-		  for(i=0;i<=ORDER;i++)
-		    {
-		      ac[i] = 0;
-		      for(j=0;j<BUFFER_SIZE - i;j++) ac[i] += creal(fft_vect[j])*creal(fft_vect[j+i]);
-		    }
-		      
-		  //Do Durbin recursion
-		  durbin(ac,lpc);
-		  if (line_flag) pctolsp2(lpc,10,lsp,&lspflag);
-		  if (root_flag) roots_found = pctoroots(lpc,root);
-
-		  fft();
-		  for(y=0;y<SCREEN_HEIGHT;y++)
-		    amp_1[y] = fft_scale * cabs(fft_vect[FREQ2INDEX(y*4000.0/SCREEN_HEIGHT)]);
-		      
-		  fft_vect[0] = 1;
-		  for(i=0;i<ORDER;i++) fft_vect[i+1] = lpc[i];
-		  for(i=ORDER;i<BUFFER_SIZE;i++) fft_vect[i] = 0;
-		      
-		  fft();
-		  for(i=0;i<BUFFER_SIZE;i++) fft_vect[i] = 3000/fft_vect[i];
-		  for(y=0;y<SCREEN_HEIGHT;y++)
-		    amp_2[y] = fft_scale * cabs(fft_vect[FREQ2INDEX(y*4000.0/SCREEN_HEIGHT)]);
-		  		  
-		  for(y=0;y<SCREEN_HEIGHT;y++)
-		    {
-		      if (amp_1[y] >= COLOR_THRESH) amp_1[y] = 255 - (255*COLOR_THRESH - COLOR_THRESH*COLOR_THRESH)/amp_1[y]; 
-		      if (amp_2[y] >= COLOR_THRESH) amp_2[y] = 255 - (255*COLOR_THRESH - COLOR_THRESH*COLOR_THRESH)/amp_2[y]; 
-
-		      i = amp_1[y];
-		      if (i >= 256) i = 255;		     
-		      point(x,SCREEN_HEIGHT - 1 - y) = i * 0x000100;
-
-		      i = amp_2[y];
-		      if (i >= 256) i = 255;		     
-		      point(x,SCREEN_HEIGHT - 1 - y) += i * 0x010001;
-		    }
-		  if (line_flag)
-		    {
-		      for(i=0;i<10;i++)
-			{
-			  y = (1 - lsp[i] * 2) * SCREEN_HEIGHT;
-			  if (y<0) y = 0;
-			  if (y>=SCREEN_HEIGHT) y = SCREEN_HEIGHT - 1;
-			  if (i%2) point(x,y) = 0xff0000; else point(x,y) = 0xffff00;
-			}
-		    }
-		  if (root_flag)
-		    {
-		      for(i=0;i<roots_found;i++)
-			{			  
-			  y = WFREQ2FREQ(8000.0 * fabs(carg(root[i])) / TWO_PI) * SCREEN_HEIGHT / 4000.0;
-			  y = SCREEN_HEIGHT - y;
-			  if (y<0) y = 0;
-			  if (y>=SCREEN_HEIGHT) y = SCREEN_HEIGHT - 1;
-			  amp = cabs(root[i]);
-			  amp = 2 * (1 - 1/amp) * 8000.0 / TWO_PI;			
-
-			  if (amp < 200) c = 0x0000ff;
-			  if (amp >= 200 && amp < 400) c = 0x000080;
-			  if (amp > 400) c = 0x000040;
-
-			  point(x,y) = c;
-			  if (x > 1) point(x - 1,y) = c;
-			  if (y > 1) point(x,y - 1) = c;
-			  if (x < SCREEN_WIDTH - 1) point(x + 1,y) = c;
-			  if (y < SCREEN_HEIGHT - 1) point(x,y + 1) = c;			 
-			}
-		    }
-
-		}	     
 	      break;
 	    }
 	  //Draw bounds
@@ -968,12 +814,6 @@ void wview(double * buffer, long size)
 		  if (++color_scheme == COLOR_SCHEMES) color_scheme = 0;
 		  redraw_event = 1;
 		}
-	      if (event.key.keysym.sym == SDLK_b) 
-		{
-		  show_1sd = !show_1sd;
-		  redraw_event = 1;
-		}
-
 	      if (event.key.keysym.sym == SDLK_v)
 		{
 		  for(x=0;x<SCREEN_WIDTH;x++)
@@ -1000,7 +840,7 @@ void wview(double * buffer, long size)
 			  if (i+j >= size)
 			    small_buffer[j] = 0;
 			  else
-			    small_buffer[j] = buffer[i+j];
+			    small_buffer[j] = buffer[size * frame + i+j];
 			}
 		      if (hpf_flag)
 			{
@@ -1104,6 +944,18 @@ void wview(double * buffer, long size)
 		  start = 0;
 		  end = size;
 		  selection_event = 1;
+		  redraw_event = 1;
+		}
+	      if (event.key.keysym.sym == SDLK_COMMA)
+		{
+		  if (--frame<0) frame = 0;
+		  printf("Frame = %d\n",frame);
+		  redraw_event = 1;
+		}
+	      if (event.key.keysym.sym == SDLK_PERIOD)
+		{
+		  if (++frame>=frames) frame = frames - 1;
+		  printf("Frame = %d\n",frame);
 		  redraw_event = 1;
 		}
 	      if (event.key.keysym.sym == SDLK_ESCAPE) flag = 0;
