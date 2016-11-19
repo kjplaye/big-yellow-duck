@@ -974,54 +974,6 @@ void wview(double * buffer, long size)
 		  redraw_event = 1;
 		}
 
-	      if (event.key.keysym.sym == SDLK_o) 
-		{
-		  i=new_start; 
-		  
-		  for(x=0;x<SCREEN_WIDTH;x++)
-		    for(y=0;y<SCREEN_HEIGHT;y++) point(x,y) = 0;
-		  
-		  for(x=0;x<SCREEN_WIDTH;x++) point(x,SCREEN_HEIGHT/2) = 0x404040;
-
-		  for(j=0;j<BUFFER_SIZE;j++) 
-		    {
-		      if (i+j >= size)
-			small_buffer[j] = 0;
-		      else
-			small_buffer[j] = buffer[i+j];
-		    }
-
-		  for(j=0;j<BUFFER_SIZE;j++) fft_vect[j] = small_buffer[j] * window[j];
-		  fft();
-
-		  amp_max = 0;
-		  for(j=0;j<(1<<(FFT_BITS-1));j++)
-		    {
-		      amp = cabs(fft_vect[j]);
-		      if (amp > amp_max) amp_max = amp;
-		    }
-
-		  for(j=0;j<(1<<(FFT_BITS-1));j++)
-		    {
-		      amp = cabs(fft_vect[j]) / amp_max;
-		      x = j * SCREEN_WIDTH / (1<<(FFT_BITS-1));
-		      y = SCREEN_HEIGHT/2 - (amp * SCREEN_HEIGHT / 2);
-		      point(x,y) = 0xffffff;
-		    }
-
-		  for(j=0;j<(1<<(FFT_BITS-1));j++)
-		    {
-		      amp = carg(fft_vect[j] * cexp(-TWO_PI*I*window_size*j/(1 << (FFT_BITS + 1)))) * 100 / TWO_PI;
-		      x = j * SCREEN_WIDTH / (1<<(FFT_BITS-1));
-		      y = SCREEN_HEIGHT - amp - 50;
-		      point(x,y) = 0x0000ff;
-		      point(x,y - 100) = 0x0000ff;
-		    }
-
-
-		  refresh();
-		}
-
 	      if (event.key.keysym.sym == SDLK_v)
 		{
 		  for(x=0;x<SCREEN_WIDTH;x++)
@@ -1125,6 +1077,25 @@ void wview(double * buffer, long size)
 		{		 
 		  start = new_start;
 		  end = new_end;
+		  selection_event = 1;
+		  redraw_event = 1;				  
+		}
+	      if (event.key.keysym.sym == SDLK_o) 
+		{
+		  amp = (SCALE_RATIO - 1) * (end - start) / 2.0;
+		  start -= amp;
+		  end += amp;
+		  if (start < 0) start = 0;
+		  if (end > size) end = size;		 
+		  selection_event = 1;
+		  redraw_event = 1;		  
+		}
+	      if (event.key.keysym.sym == SDLK_i) 
+		{
+		  amp = (1.0/SCALE_RATIO - 1) * (end - start) / 2.0;
+		  start -= amp;
+		  end += amp;
+		  if (end <= start) end = start + 1;
 		  selection_event = 1;
 		  redraw_event = 1;				  
 		}
