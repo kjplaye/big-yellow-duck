@@ -1,6 +1,7 @@
 import math
 from cols import transpose
 import pickle
+import random
 
 def dim(x):
     if isinstance(x,str):
@@ -15,11 +16,10 @@ def blockup(x,n):
 
 def entropy(x):
     c = dict()
-    T = 0 
+    T = 0
     for e in x:
         c[e] = c.get(e,0) + 1
         T+=1
-    
     P = [float(c[k])/T for k in c]
     return -sum([math.log(p,2) * p for p in P])
 
@@ -34,19 +34,22 @@ def reverse_it(x):
         L.reverse()
         return L
 
-def form_table(L):
-    VL = dict()
-    VR = dict()
-    l_cnt = 0
-    r_cnt = 0
-    for l in L:
-        if l[0] not in VL:
-            VL[l[0]] = l_cnt
-            l_cnt+=1
-        if l[1] not in VR:
-            VR[l[1]] = r_cnt
-            r_cnt+=1
-    T = [[0 for j in range(r_cnt)]  for i in range(l_cnt)]
+def form_table(L,rowkeys = None,colkeys = None):
+    if rowkeys == None:
+      SL = set()
+      for l in L:
+        if l[0] not in SL:
+          SL.add(l[0])
+      rowkeys = sorted(list(SL))
+    VL = {rowkeys[i]:i for i in range(len(rowkeys))}
+    if colkeys == None:
+      SR = set()
+      for l in L:
+        if l[1] not in SR:
+          SR.add(l[1])
+      colkeys = sorted(list(SR))
+    VR = {colkeys[i]:i for i in range(len(colkeys))}
+    T = [[0 for j in range(len(colkeys))]  for i in range(len(rowkeys))]
     for l in L:
         T[VL[l[0]]][VR[l[1]]] += 1
     return T
@@ -64,3 +67,9 @@ def flatten(x):
 
 def sortby(x,L):
     return transpose(sorted(transpose([L,x])))[1]
+
+def shuffle_it(x):
+    y = x[:]
+    random.shuffle(y)
+    return y
+  
