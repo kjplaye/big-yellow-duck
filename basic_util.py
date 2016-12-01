@@ -1,5 +1,5 @@
 import math
-from cols import transpose
+from cols import transpose, col
 import pickle
 import random
 
