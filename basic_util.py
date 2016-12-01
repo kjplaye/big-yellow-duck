@@ -2,6 +2,7 @@ import math
 from cols import transpose, col
 import pickle
 import random
+import numpy as np
 
 def dim(x):
     if isinstance(x,str):
@@ -72,4 +73,8 @@ def shuffle_it(x):
     y = x[:]
     random.shuffle(y)
     return y
-  
+
+def dither(x,e = 0.5):
+  a = np.array(x)
+  n = np.random.random(a.shape) * e
+  return a + n
