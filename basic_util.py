@@ -1,3 +1,4 @@
+from collections import Counter
 import math
 from cols import transpose, col
 import pickle
@@ -78,3 +79,10 @@ def dither(x,e = 0.5):
   a = np.array(x)
   n = np.random.random(a.shape) * e
   return a + n
+
+def myhist(x,sortit = True):
+  C = Counter(x)
+  KV = [[k,C[k]] for k in C.keys()]
+  if sortit:
+    KV = sorted(KV,key = lambda x:x[1])
+  return col(KV)
