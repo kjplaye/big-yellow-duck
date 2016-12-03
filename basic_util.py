@@ -85,6 +85,10 @@ class form_table_result(col):
     def bits(self):
         x, p, dof, ex = scipy.stats.chi2_contingency(self)
         return -scipy.stats.chi2.logsf(x,dof) / math.log(2)
+    def chi_sqr_components(self):
+        x, p, dof, ex = scipy.stats.chi2_contingency(self)
+        a = np.array(self)
+        return (a - ex)**2 / ex
         
 def form_table(L,rowkeys = None,colkeys = None):
     if rowkeys == None:
