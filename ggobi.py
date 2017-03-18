@@ -4,6 +4,12 @@ from subprocess import Popen, PIPE
 import xml.etree.cElementTree
 from collections import defaultdict
 import numpy as np
+import six
+
+if six.PY3:
+    py3 = True
+else:
+    py3 = False
 
 def ggobi(X, cl = None, smallest_glyph = 'auto'):
     """
@@ -72,9 +78,12 @@ def ggobi(X, cl = None, smallest_glyph = 'auto'):
     x += '</data>\n'
     x += '</ggobidata>\n'
     f = tempfile.NamedTemporaryFile(suffix = '.xml')
+    if py3:
+        x = bytes(x,encoding='ascii')
     f.write(x)
     f.flush()
     print('Save brushed output as %s.xml' % f.name[:-4])
+    print('Turn "cycle" on and off to unlock menu')
     p = Popen(['ggobi',f.name])
     p.communicate()
     xml_filename = f.name[:-4] + '.xml'

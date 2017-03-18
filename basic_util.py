@@ -5,6 +5,7 @@ import pickle
 import random
 import numpy as np
 import scipy.stats
+from six.moves import xrange
 
 def dim(x):
     if isinstance(x,str):
