@@ -234,11 +234,15 @@ int imagesc(double * data, long long data_len, long long width, long long frames
 		  win_y1 = v1 + v2*0.5;
 		  redraw_flag = 1;
 		  break;
-		case SDLK_KP_PLUS:
+                case SDLK_KP_PLUS:
+                case SDLK_PLUS:
+                case SDLK_EQUALS:
+                    
 		  power /= POWER_STEP;
 		  redraw_flag = 1;
 		  break;
-		case SDLK_KP_MINUS:
+                case SDLK_KP_MINUS:
+                case SDLK_MINUS:
 		  power *= POWER_STEP;
 		  redraw_flag = 1;
 		  break;
