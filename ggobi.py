@@ -20,6 +20,9 @@ def ggobi(X, cl = None, smallest_glyph = 'auto'):
         'visible' - use visible glyphs, but it slows down for larger data sizes.
         'auto' - use 'fast' if we have 1000 data points or more.
 
+    NOTE: Colors for 0,1,2,.... are 
+          Purple, Pink, Red, Blue, Green, Yellow, Brown, Grey, Yellow
+
     USAGE EXAMPLE:
     >>> import numpy as np
     >>> cl_in = np.random.randint(4,size = (2000))
