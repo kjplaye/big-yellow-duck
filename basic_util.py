@@ -53,10 +53,6 @@ def dither(x,e = 0.5):
   n = np.random.random(a.shape) * e
   return a + n
 
-
-
-
-
 def pval(x):
     if hasattr(x,'pval'):
         return x.pval()
@@ -127,6 +123,13 @@ def myhist(x,sortit = True):
   if sortit:
     KV = sorted(KV,key = lambda x:x[1])
   return myhist_result(KV)
+
+def v_pad(L,value = 0, length = 10):
+    P = np.ones([length] + list(L[0].shape)[1:]) * value
+    return np.concatenate([L[i] if i == len(L)-1 else np.concatenate([L[i],P]) for i in range(len(L))])
+
+def h_pad(L,value = 0, length = 10):
+    return v_pad([e.transpose() for e in L], value = value, length = length).transpose()
 
 
 
