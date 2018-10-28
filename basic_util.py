@@ -5,6 +5,10 @@ import pickle
 import random
 import numpy as np
 import scipy.stats
+import tempfile
+import sys
+import os
+import pickle
 
 def dim(x):
     if isinstance(x,str):
@@ -41,7 +45,8 @@ def flatten(x):
         return x
 
 def sortby(x,L):
-    return transpose(sorted(transpose([L,x])))[1]
+    E = sorted([[x[i],L[i]] for i in range(len(x))],cmp = lambda a,b: 1-2*(a[1] < b[1]))
+    return([e[0] for e in E])
 
 def shuffle_it(x):
     y = x[:]
@@ -65,7 +70,7 @@ def bits(x):
     if hasattr(x,'pval'):
         return -math.log(x.pval(),2)
 
-    
+
 def entropy(x):
     c = dict()
     T = 0
@@ -87,25 +92,15 @@ class form_table_result(col):
         return (a - ex)**2 / ex
         
 def form_table(L,rowkeys = None,colkeys = None):
-    if rowkeys == None:
-      SL = set()
-      for l in L:
-        if l[0] not in SL:
-          SL.add(l[0])
-      rowkeys = sorted(list(SL))
-    VL = {rowkeys[i]:i for i in range(len(rowkeys))}
-    if colkeys == None:
-      SR = set()
-      for l in L:
-        if l[1] not in SR:
-          SR.add(l[1])
-      colkeys = sorted(list(SR))
-    VR = {colkeys[i]:i for i in range(len(colkeys))}
-    T = [[0 for j in range(len(colkeys))]  for i in range(len(rowkeys))]
-    for l in L:
-        T[VL[l[0]]][VR[l[1]]] += 1
-    TAB = form_table_result(T)
-    return TAB
+  def pval(self):
+    return scipy.stats.chi2_contingency(self)[1]
+  def bits(self):
+    x, p, dof, ex = scipy.stats.chi2_contingency(self)
+    return -scipy.stats.chi2.logsf(x,dof) / math.log(2)
+  def labeled(self):
+    m = len(self)
+    n = len(self[0])
+    return col([['',''] + [self.colkeys[j] for j in range(n)]] + [['',''] + ['-' for j in range(n)]] + [[self.rowkeys[i],':'] + [self[i][j] for j in range(n)] for i in range(m)])
 
 class myhist_result(col):
     def pval(self):
@@ -124,13 +119,16 @@ def myhist(x,sortit = True):
     KV = sorted(KV,key = lambda x:x[1])
   return myhist_result(KV)
 
-def v_pad(L,value = 0, length = 10):
-    P = np.ones([length] + list(L[0].shape)[1:]) * value
-    return np.concatenate([L[i] if i == len(L)-1 else np.concatenate([L[i],P]) for i in range(len(L))])
+def pick_save(file_name,x):
+  open(file_name,'w').write(pickle.dumps(x))
 
-def h_pad(L,value = 0, length = 10):
-    return v_pad([e.transpose() for e in L], value = value, length = length).transpose()
+def pick_load(file_name):
+  return pickle.loads(open(file_name).read())
 
+def h_pad(L,padn = 5, padv = -1):
+  n = L[0].shape[1]
+  L0 = sum([[L[i],padv + np.zeros([padn,n])] for i in range(len(L)-1)],[]) + [L[-1]]
+  return np.concatenate(L0)
 
-
-
+def v_pad(L,padn = 5, padv = -1):
+  return h_pad([e.T for e in L],padn = padn, padv = padv).T
