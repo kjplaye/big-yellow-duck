@@ -21,7 +21,7 @@ def imagesc(L):
     """
     Example:
     >>> import math
-    >>> M = [[math.sin(x*y*0.1) for x in xrange(100)] for y in xrange(100)]
+    >>> M = [[math.sin(x*y*0.1) for x in range(100)] for y in range(100)]
     >>> imagesc(M)
 
     KEYS:
