@@ -19,7 +19,7 @@ def dim(x):
         return 0
 
 def blockup(x,n):
-    return [x[i:i+n] for i in xrange(0,len(x)-n+1,n)]
+    return [x[i:i+n] for i in range(0,len(x)-n+1,n)]
 
 
 def rotate(x,n):
@@ -34,7 +34,7 @@ def reverse_it(x):
         return L
 
 def delta(x,d = 1):
-    return [x[i+d] - x[i] for i in xrange(len(x) - d)]
+    return [x[i+d] - x[i] for i in range(len(x) - d)]
 
 def flatten(x):
     if dim(x)==2:
