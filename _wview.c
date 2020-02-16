@@ -417,16 +417,16 @@ void wview(double * buffer, long size, int frames)
 	  if (audio_window_bar >= 0 && audio_window_bar < SCREEN_WIDTH)
 	    {
 	      for(y=0;y<SCREEN_HEIGHT;y++) point(audio_window_bar,y)^=0xffffff;
-	    }
-	  
-	  //Clear screen
-	  for(x=0;x<SCREEN_WIDTH;x++)
-	    for(y=0;y<SCREEN_HEIGHT;y++) point(x,y)=0;
+	    }	  
 	  
 	  //Begin Drawing
 	  switch(mode)
 	    {
-	    case MODE_TIME:	 	      
+	    case MODE_TIME:
+	      //Clear screen
+	      for(x=0;x<SCREEN_WIDTH;x++)
+		for(y=0;y<SCREEN_HEIGHT;y++) point(x,y)=0;
+	      
 	      for (i=start;i<end;i++) 
 		{
 		  x = ((i-start)*SCREEN_WIDTH)/(end-start);
