@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <complex.h>
+#include <pthread.h>
 
 #define MAX_FFT_BITS 10
 #define MIN_FFT_BITS 4
@@ -13,6 +14,9 @@
 #define ORDER 10
 #define COLOR_THRESH 192
 #define MAX_ORDER 20
+#define AUDIO_BUFFER_SIZE 128
+#define AUDIO_FOLLOW_RATIO 0.618
+#define MAX(a,b) (((a)>(b)) ? (a) : (b))
 
 #define MODES 2
 #define MODE_TIME 0
@@ -39,20 +43,6 @@ int color_scheme = CS_BLACK_ON_WHITE;
 #define WFREQ2FREQ(f) ((warp_flag) ? (4000.0*HZ2MEL(f)/2145.0) : (f))
 #define FREQ2INDEX(f) ((int)HZ2INDEX(FREQ2WFREQ((f))))
 
-
-//For pctolsp
-#define MAXORD	24
-#define N	128
-#define NB	15
-#define EPS	1.e-6
-#define FALSE	0
-#define TRUE	1
-
-//For pctoroots
-#define MAX_TRY 100
-#define MAX_ITER 100
-#define ROOT_EPS 0.001
-
 #define point(x,y) pnt[(int)(x)+(int)(y)*SCREEN_WIDTH]
 SDL_Surface *screen;
 unsigned * pnt;
@@ -70,219 +60,6 @@ double pal[7][3] = {
   {1,0,0},
   {0.7,0.7,1}
 };
-
-
-int pctoroots(double * lpc,complex * root)
-{
-  //Newton's method: 
-  //  x ---> x - f(x)/f'(x)
-  int i,j,k;
-
-  int roots_found = 0;
-  complex x,last_x,pow_x,f,f_prime;
-  double dist;
-
-  for (i=0;i<MAX_TRY && roots_found < 10;i++)
-    {
-      x = ((4.0*(rand() % RAND_MAX)/RAND_MAX) - 2) + ((4.0*(rand() % RAND_MAX)/RAND_MAX) - 2)*I;
-      for(j=0;j<MAX_ITER;j++)
-	{
-	  last_x = x;
-
-	  pow_x = 1;
-	  f = 1;
-	  f_prime = 0;
-	  for(k=0;k<ORDER;k++)
-	    {	      
-	      f_prime += pow_x * lpc[k] * (k+1);
-	      pow_x *= x;
-	      f += pow_x * lpc[k];
-	    }
-	  x = x - f / f_prime;
-
-	  dist = cabs(x - last_x);
-
-	  if (dist > 1/ROOT_EPS) break;
-	  if (dist < ROOT_EPS)
-	    {
-	      if (cimag(x) < 0) x = creal(x) - cimag(x) * I;
-	      for (k=0;k<roots_found;k++)
-		{
-		  if (cabs(x - root[k]) < ROOT_EPS) break;
-		}
-	      if (k==roots_found) root[roots_found++] = x;
-	      break;
-	    }
-	}
-    }
-  return roots_found;
-}
-
-void pctolsp2(double * lpc,int m,double * freq,int * lspflag)
-{
-  static double lastfreq[MAXORD];
-  double p[MAXORD], q[MAXORD], pi, ang, fm, tempfreq;
-  double fr, pxr, tpxr, tfr, pxm, pxl, fl, qxl, tqxr;
-  double qxm, qxr, tqxl;
-  int mp, mh, nf, mb, jc, i, j;
-  double a[MAXORD+1];
-
-  for(i=0;i<ORDER;i++) a[i+1] = lpc[i];
-  a[0] = 1;
-  
-  pi = atan(1.) * 4.0;
-  mp = m + 1;
-  mh = m / 2;
-  
-  /* *generate p and q polynomials				 	*/
-
-  for (i = 0; i < mh; i++)
-    {
-      p[i] = a[i+1] + a[m-i];
-      q[i] = a[i+1] - a[m-i];
-    }
-  
-  /* *compute p at f=0.							*/
-  
-  fl = 0.;
-  for (pxl = 1.0, j = 0; j < mh; j++)  pxl += p[j];
-  
-  /* *search for zeros of p						*/
-  
-  nf = 0;
-  for (i = 1; i <= N; pxl = tpxr, fl = tfr, i++)
-    {
-      mb = 0;
-      fr = i * (0.5 / N);
-      pxr = cos(mp * pi * fr);
-      for (j = 0; j < mh; j++)
-	{
-	  jc = mp - (j+1)*2;
-	  ang = jc * pi * fr;
-	  pxr += cos(ang) * p[j];
-	}
-      tpxr = pxr;
-      tfr = fr;
-      if (pxl * pxr > 0.0) continue;
-
-      do
-	{
-	  mb++;
-	  fm = fl + (fr-fl) / (pxl-pxr) * pxl;
-	  pxm = cos(mp * pi * fm);
-	  
-	  for (j = 0; j < mh; j++)
-	    {
-	      jc = mp - (j+1) * 2;
-	      ang = jc * pi * fm;
-	      pxm += cos(ang) * p[j];
-	    }
-	  (pxm*pxl > 0.0) ? (pxl = pxm, fl = fm) : (pxr = pxm, fr = fm);
-	  
-	} 
-      while ((fabs(pxm) > EPS) && (mb < 4));
-      
-      if ((pxl-pxr) * pxl == 0) 
-	{
-	  for (j = 0; j < m; j++) freq[j] = (j+1) * 0.04545;
-	  printf("pctolsp2: default lsps used, avoiding /0\n");
-	  return;
-	}
-      freq[nf] = fl + (fr-fl) / (pxl-pxr) * pxl;
-      nf += 2;
-      if (nf > m-2) break;
-    }
-  
-  
-  /* *search for the zeros of q(z)					*/
-  
-  freq[m] = 0.5;
-  fl = freq[0];
-  qxl = sin(mp * pi * fl);
-  for (j = 0; j < mh; j++)
-    {
-      jc = mp - (j+1) * 2;
-      ang = jc * pi * fl;
-      qxl += sin(ang) * q[j];
-    }
-  
-  for (i = 2; i < mp; qxl = tqxr, fl = tfr, i += 2)
-    {
-      mb = 0;
-      fr = freq[i];
-      qxr = sin(mp * pi * fr);
-      for (j = 0; j < mh; j++)
-	{
-	  jc = mp - (j+1) * 2;
-	  ang = jc * pi * fr;
-	  qxr += sin(ang) * q[j];
-	}
-      tqxl = qxl;
-      tfr = fr;
-      tqxr = qxr;
-      
-      do
-	{
-	  mb++;
-	  fm = (fl+fr) * 0.5;
-	  qxm = sin(mp * pi * fm);
-	  
-	  
-	  for (j = 0; j < mh; j++)
-	    {
-	      jc = mp - (j+1) * 2;
-	      ang = jc * pi * fm;
-	      qxm += sin(ang) * q[j];
-	    }
-	  (qxm*qxl > 0.0) ? (qxl = qxm, fl = fm) : (qxr = qxm, fr = fm);
-	  
-	} 
-      while ((fabs(qxm) > EPS*tqxl) && (mb < NB));
-      
-      if ((qxl-qxr) * qxl == 0)
-	{
-	  for (j = 0; j < m; j++) freq[j] = lastfreq[j];
-	  printf("pctolsp2: last lsps used, avoiding /0\n");
-	  return;
-	}
-      freq[i-1] = fl + (fr-fl) / (qxl-qxr) * qxl;
-    }
-  
-  /* *** ill-conditioned cases						*/
-  
-  *lspflag = FALSE;
-  if (freq[0] == 0.0 || freq[0] == 0.5) *lspflag = TRUE;
-  for (i = 1; i < m; i++)
-    {
-      if (freq[i] == 0.0 || freq[i] == 0.5) *lspflag = TRUE;
-      
-      /* *reorder lsps if non-monotonic					*/
-      
-      if (freq[i]  <  freq[i-1]) 
-	{
-	  *lspflag = TRUE;
-	  printf("pctolsp2: non-monotonic lsps\n");
-	  tempfreq = freq[i];
-	  freq[i] = freq[i-1];
-	  freq[i-1] = tempfreq;
-	}
-    }
-  
-  /* *if non-monotonic after 1st pass, reset to last values		*/
-  
-  for (i = 1; i < m; i++)
-    {
-      if (freq[i]  <  freq[i-1])
-	{
-	  printf("pctolsp2: Reset to previous lsp values\n");
-	  for (j = 0; j < m; j++) freq[j] = lastfreq[j];
-	  break;
-	}
-    }
-  
-  for (i = 0; i < m; i++) lastfreq[i] = freq[i];
-}
-
 
 double window_size = 128;
 double fft_scale = 100.0;
@@ -330,45 +107,6 @@ void fft(void)
     }
 }
 
-
-void durbin(double * ac, double * lpc)
-{
-  int i,k;
-  double alpha,beta,eps;
-  double b[ORDER];
-  double temp[ORDER];
-  
-  if (ac[0] == 0)
-    {
-      for(i=0;i<ORDER;i++) lpc[i] = 0;
-      return;
-    }
-
-  lpc[0] = ac[1] / ac[0];
-  b[0] = 1 / ac[0];
-
-  for(k=2;k<=ORDER;k++)
-    {
-      eps = 0;
-      for(i=1;i<k;i++) eps += ac[i] * b[i-1];
-      alpha = 1/(1 - eps*eps);
-      beta = - eps * alpha;
-
-      for(i=k-1;i>0;i--) b[i] = b[i-1];
-      b[0] = 0;
-      for(i=0;i<k;i++) temp[i] = alpha *  b[i] + beta * b[k - 1 - i];
-      memcpy(b,temp,sizeof(double) * ORDER);
-
-      eps = 0;
-      for(i=1;i<k;i++) eps += lpc[i - 1] * ac[k-i];
-      lpc[k-1] = 0;
-      for(i=0;i<k;i++) lpc[i] += (ac[k] -  eps) * b[i];
-    }
-
-  for(i=0;i<ORDER;i++) lpc[i]*=-1;
-}
-
-
 void window_init(double * window)
 {
   int i;
@@ -386,6 +124,7 @@ void refresh(void)
   if (SDL_MUSTLOCK(screen)) SDL_LockSurface(screen);
 }
 
+
 void screen_init(void)
 {
   SDL_Init(SDL_INIT_VIDEO);
@@ -399,8 +138,118 @@ void screen_init(void)
   if ( SDL_MUSTLOCK(screen) ) SDL_LockSurface(screen);
 }
 
-int cmp_complex(complex * a, complex * b)
+double * audio_buffer;
+int audio_current;
+int audio_start;
+int audio_stop;
+double audio_abs_max;
+int audio_window_start;
+int audio_window_end;
+int audio_window_bar;
+int audio_follow;
+int audio_playing;
+pthread_mutex_t audio_mutex;
+void audio_callback(void * userdata, unsigned char * stream, int len)
 {
+  int i,y;
+  unsigned short * data_stream = (unsigned short *)stream;
+  int stream_size = len / 2;
+  unsigned short sample;
+  
+  if (audio_current >= audio_stop)
+    {
+      if (audio_window_bar >= 0 && audio_window_bar < SCREEN_WIDTH)
+      	{
+      	  for(y=0;y<SCREEN_HEIGHT;y++) point(audio_window_bar,y)^=0xffffff;
+      	}
+      pthread_mutex_lock(&audio_mutex);
+      refresh();
+      pthread_mutex_unlock(&audio_mutex);
+      audio_follow = 0;
+      audio_playing = 0;
+      SDL_PauseAudio(1);
+      return;
+    }
+
+  if (audio_window_bar >= 0 && audio_window_bar < SCREEN_WIDTH)
+    {
+      for(y=0;y<SCREEN_HEIGHT;y++) point(audio_window_bar,y)^=0xffffff;
+    }
+  audio_window_bar = ((audio_current-audio_window_start)*SCREEN_WIDTH)/(audio_window_end-audio_window_start);
+  if (audio_window_bar >= 0 && audio_window_bar < SCREEN_WIDTH)
+    {
+      for(y=0;y<SCREEN_HEIGHT;y++) point(audio_window_bar,y)^=0xffffff;
+    }
+  pthread_mutex_lock(&audio_mutex);
+  refresh();
+  pthread_mutex_unlock(&audio_mutex);
+
+  
+  for(i=0;i<stream_size;i++)
+    {
+      sample = 32767 * audio_buffer[audio_current] / audio_abs_max;
+      data_stream[i] = (audio_current >= audio_stop) ? 0 : sample;
+      audio_current++;
+    }
+}
+
+void play_audio(double * data, int start, int stop)  
+{
+  int y;
+
+  if (audio_playing && audio_follow == 0)
+    {
+      if (audio_window_bar >= 0 && audio_window_bar < SCREEN_WIDTH)
+      	{
+      	  for(y=0;y<SCREEN_HEIGHT;y++) point(audio_window_bar,y)^=0xffffff;
+      	}
+      pthread_mutex_lock(&audio_mutex);
+      refresh();
+      pthread_mutex_unlock(&audio_mutex);
+
+      audio_playing = 0;
+      audio_follow = 0;
+      SDL_PauseAudio(1);
+      return;
+    }
+
+  audio_current = start;
+  audio_start = start;
+  audio_stop = stop;
+  audio_window_bar = -1;
+  audio_playing = 1;
+  SDL_PauseAudio(0);
+}
+
+void audio_init(double * data, double min, double max)
+{
+  SDL_AudioSpec *desired, *obtained;
+  SDL_AudioSpec *hardware_spec;
+
+  audio_buffer = data;
+  audio_abs_max = MAX(max,-min);
+
+  desired = malloc(sizeof(SDL_AudioSpec));
+  obtained = malloc(sizeof(SDL_AudioSpec));
+  desired->freq=4000;
+  desired->format=AUDIO_U16LSB;
+  desired->channels=0;  
+  desired->samples=AUDIO_BUFFER_SIZE;
+  desired->callback=audio_callback;
+  desired->userdata=NULL;
+  if ( SDL_OpenAudio(desired, obtained) < 0 ){
+    fprintf(stderr, "Couldn't open audio: %s\n", SDL_GetError());
+    exit(-1);
+  }
+  free(desired);
+  hardware_spec=obtained;
+}
+
+int cmp_complex(const void * aa, const void  * bb)
+{
+  const complex * a = aa;
+  const complex * b = bb;
+  
   double a_arg = carg(*a);
   double b_arg = carg(*b);
 
@@ -483,7 +332,6 @@ void wview(double * buffer, long size, int frames)
   int line_flag = 0;
   int root_flag = 0;
   int grid_flag = 0;
-  int hpf_flag = 1;
   int warp_flag = 0;
   
   int selection_event = 1;
@@ -508,12 +356,7 @@ void wview(double * buffer, long size, int frames)
   int roots_found;
   double formant[2];
   int frame = 0;
-
-  // 2nd order Butterworth 100 Hz HPF:
-  struct filter_t hpf_zero;
-  struct filter_t hpf_pole;
-  double ahpf[3] = {0.946, -1.892, 0.946};
-  double bhpf[3] = {1.0, -1.889033, 0.8948743};
+  double nstart, nend;
 
   if (size <= 0) return;
   if (frames <= 0) return;
@@ -522,7 +365,7 @@ void wview(double * buffer, long size, int frames)
   refresh();
   fft_init();
   window_init(window);
-
+  
   start = 0;
   end = size;
 
@@ -538,11 +381,14 @@ void wview(double * buffer, long size, int frames)
 	  if (buffer[size*j + i] < min[j]) min[j] = buffer[size*j + i];      
 	}
     }
+
+  audio_init(buffer, min[0], max[0]);
   
   flag = 1;
   while(flag)
     {        
       //Refresh bounds
+      
       if (start > end)
 	{
 	  start ^= end;
@@ -557,6 +403,8 @@ void wview(double * buffer, long size, int frames)
 	  new_start ^= new_end;
 	}
 
+      audio_window_start = start;
+      audio_window_end = end;
       if (selection_event)
 	{
 	  printf("Showing samples %ld..%ld selected %ld..%ld\n",start,end,new_start,new_end);
@@ -565,6 +413,12 @@ void wview(double * buffer, long size, int frames)
 
       if (redraw_event)
 	{
+	  // Draw audio bar
+	  if (audio_window_bar >= 0 && audio_window_bar < SCREEN_WIDTH)
+	    {
+	      for(y=0;y<SCREEN_HEIGHT;y++) point(audio_window_bar,y)^=0xffffff;
+	    }
+	  
 	  //Clear screen
 	  for(x=0;x<SCREEN_WIDTH;x++)
 	    for(y=0;y<SCREEN_HEIGHT;y++) point(x,y)=0;
@@ -606,13 +460,6 @@ void wview(double * buffer, long size, int frames)
 			small_buffer[j] = buffer[size * frame + i+j];
 		    }
 		  phase_offset = i+(window_size - 1)*0.5;		 
-		  if (hpf_flag) 
-		    {
-		      filter_init(&hpf_zero,2,ahpf);
-		      filter_init(&hpf_pole,2,bhpf);
-		      apply_zero_filter(&hpf_zero,small_buffer,BUFFER_SIZE);
-		      apply_pole_filter(&hpf_pole,small_buffer,BUFFER_SIZE);
-		    }
 		  for(j=0;j<BUFFER_SIZE;j++) fft_vect[j] = small_buffer[j] * window[j];
 		  switch (mode)
 		    {
@@ -709,14 +556,34 @@ void wview(double * buffer, long size, int frames)
 		  point(x,(SCREEN_HEIGHT * 3) / 4)^=0x404040;
 		}
 	    }
-	  
+
+	  pthread_mutex_lock(&audio_mutex);	   
 	  refresh();
+	  pthread_mutex_unlock(&audio_mutex);
+
 	  redraw_event = 0;
 	}
 
       //Event loop
-      if (SDL_WaitEvent(&event))
+      if (SDL_PollEvent(&event) || audio_follow)
 	{
+	  if (audio_follow)	   
+	    {
+	      if ((audio_current - start) / (end - start) > AUDIO_FOLLOW_RATIO)
+		{
+		  nstart = audio_current - AUDIO_FOLLOW_RATIO * (end - start);
+		  nend = nstart + (end - start);
+		  start = nstart;
+		  end = nend;
+		  if (end >= size)
+		    {
+		      end = size;
+		      start = end - (nend - nstart);
+		    }
+		  selection_event = 1;
+		  redraw_event = 1;
+		}
+	    }	  
 	  switch(event.type)
 	    {
 	    case SDL_VIDEORESIZE:
@@ -728,7 +595,6 @@ void wview(double * buffer, long size, int frames)
 	    case SDL_KEYDOWN:
 	      if (event.key.keysym.sym == SDLK_LEFTBRACKET) 
 		{
-
 		  x = (end - start)/3;
 		  start -= x;
 		  end -= x;
@@ -803,6 +669,16 @@ void wview(double * buffer, long size, int frames)
 		  printf("fft is now %d bits\n",FFT_BITS);
 		  redraw_event = 1;
 		}
+	      if (event.key.keysym.sym == SDLK_p) 
+		{
+		  audio_follow = 0;
+		  play_audio(buffer, new_start, new_end);
+		}
+	      if (event.key.keysym.sym == SDLK_f) 
+		{
+		  audio_follow = 1;
+		  play_audio(buffer, start, size);
+		}	    
 	      if (event.key.keysym.sym == SDLK_m) 
 		{
 		  if (++mode == MODES) mode=0;
@@ -812,85 +688,6 @@ void wview(double * buffer, long size, int frames)
 	      if (event.key.keysym.sym == SDLK_c) 
 		{
 		  if (++color_scheme == COLOR_SCHEMES) color_scheme = 0;
-		  redraw_event = 1;
-		}
-	      if (event.key.keysym.sym == SDLK_v)
-		{
-		  for(x=0;x<SCREEN_WIDTH;x++)
-		    for(y=0;y<SCREEN_HEIGHT;y++) point(x,y) = 0;
-
-		  for(x=0;x<SCREEN_WIDTH;x++)
-		    {
-		      point(x,1*SCREEN_HEIGHT/(4)) = 0x0000ff;
-		      point(x,2*SCREEN_HEIGHT/(4)) = 0x0000ff;
-		      point(x,3*SCREEN_HEIGHT/(4)) = 0x0000ff;
-		    }
-		  for(y=0;y<SCREEN_HEIGHT;y++)
-		    {
-		      point(1*SCREEN_WIDTH/(4),y) = 0x0000ff;
-		      point(2*SCREEN_WIDTH/(4),y) = 0x0000ff;
-		      point(3*SCREEN_WIDTH/(4),y) = 0x0000ff;
-		    }
-
-		  c = 0;
-		  for(i=new_start;i<new_end;i+=(1+(new_end - new_start)/VOWEL_ITER))
-		    {
- 		      for(j=0;j<BUFFER_SIZE;j++) 
-			{
-			  if (i+j >= size)
-			    small_buffer[j] = 0;
-			  else
-			    small_buffer[j] = buffer[size * frame + i+j];
-			}
-		      if (hpf_flag)
-			{
-			  filter_init(&hpf_zero,2,ahpf);
-			  filter_init(&hpf_pole,2,bhpf);
-			  apply_zero_filter(&hpf_zero,small_buffer,BUFFER_SIZE);
-			  apply_pole_filter(&hpf_pole,small_buffer,BUFFER_SIZE);
-			}
-		      for(j=0;j<BUFFER_SIZE;j++) fft_vect[j] = small_buffer[j] * window[j];
-
-		      //Find auto correlations
-		      for(k=0;k<=ORDER;k++)
-			{
-			  ac[k] = 0;
-			  for(j=0;j<BUFFER_SIZE - k;j++) ac[k] += creal(fft_vect[j])*creal(fft_vect[j+k]);
-			}
-		      
-		      //Do Durbin recursion
-		      durbin(ac,lpc);
-		      roots_found = pctoroots(lpc,root);
-		      qsort(root,10,sizeof(complex),cmp_complex);
-
-		      j = 0;
-		      for(k=0;k<10 && j<2;k++)
-			{
-			  if (carg(root[k]) * 8000.0 / TWO_PI < 200) continue;
-			  if (carg(root[k]) * 8000.0 / TWO_PI < 400 && j>0) continue;
-			  if (carg(root[k]) * 8000.0 / TWO_PI > 1000 && j==0) continue;
-			  if (carg(root[k]) * 8000.0 / TWO_PI > 3000) continue;
-
-			  if ( (2 * (cabs(root[k]) - 1) * 8000 / TWO_PI) > VOWEL_BW_THRESH) continue;
-			  formant[j++] = carg(root[k]) * 8000.0 / TWO_PI;			  
-			}
-		      if (k!=10)
-			{
-			  x = formant[0] * SCREEN_WIDTH / (1000.0 );
-			  y = (4000 - formant[1]) * SCREEN_HEIGHT / (4000.0 );
-			  
-			  amp = 255 * (2 * (cabs(root[k]) - 1) * 8000 / TWO_PI) / VOWEL_BW_THRESH;
-			  
-			  point(x,y) = 0x010101 * (int)amp;		     
-			}
-		      if (!((++c) % VOWEL_ANIMATE)) refresh();
-		    }
-		  refresh();
-		}
-	      if (event.key.keysym.sym == SDLK_f) 
-		{
-		  hpf_flag = !hpf_flag;
-		  printf("high pass filter flag is now %d\n",hpf_flag);
 		  redraw_event = 1;
 		}
 	      if (event.key.keysym.sym == SDLK_l) 
