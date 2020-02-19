@@ -17,6 +17,7 @@
 #define AUDIO_BUFFER_SIZE 128
 #define AUDIO_FOLLOW_RATIO 0.618
 #define MAX(a,b) (((a)>(b)) ? (a) : (b))
+#define MAX_THREADS 64
 
 #define MODES 2
 #define MODE_TIME 0
@@ -27,26 +28,23 @@ char mode_string[2][100] = {"Time","Spectrogram"};
 #define VOWEL_ITER 8000
 #define VOWEL_ANIMATE 100
 #define VOWEL_BW_THRESH 300
-#define COLOR_SCHEMES 4
+#define COLOR_SCHEMES 3
 #define CS_BLACK_ON_WHITE 0
 #define CS_WHITE_ON_BLACK 1
 #define CS_HEAT 2
-#define CS_PHASE 3
 int color_scheme = CS_BLACK_ON_WHITE;
 
 #define HZ2MEL(f) (1127.01048 * log(1 + (f)/700.0))
 #define MEL2HZ(m) (700.0 * (exp((m) / 1127.01048) - 1))
 #define HZ2INDEX(f) ((f) * (1 << FFT_BITS) / 8000.0)
 #define INDEX2HZ(i) ((i) * 8000.0 / (1 << FFT_BITS))
-#define FREQ2WFREQ(f) ((warp_flag) ? MEL2HZ(2145.0*(f)/4000.0) : (f))
-#define FREQ2WFREQ(f) ((warp_flag) ? MEL2HZ(2145.0*(f)/4000.0) : (f))
-#define WFREQ2FREQ(f) ((warp_flag) ? (4000.0*HZ2MEL(f)/2145.0) : (f))
-#define FREQ2INDEX(f) ((int)HZ2INDEX(FREQ2WFREQ((f))))
+#define FREQ2INDEX(f) ((int)HZ2INDEX(f))
 
 #define point(x,y) pnt[(int)(x)+(int)(y)*SCREEN_WIDTH]
 SDL_Surface *screen;
 unsigned * pnt;
 
+#define MAX_SCREEN_WIDTH 10000
 int SCREEN_WIDTH = 800;
 int SCREEN_HEIGHT = 600;
 
@@ -65,21 +63,23 @@ double window_size = 128;
 double fft_scale = 100.0;
 int FFT_BITS = 10;
 
-complex A[(1<<MAX_FFT_BITS)];
-complex B[(1<<MAX_FFT_BITS)];
+complex A[MAX_SCREEN_WIDTH][(1<<MAX_FFT_BITS)];
+complex B[MAX_SCREEN_WIDTH][(1<<MAX_FFT_BITS)];
 complex ROU[(1<<MAX_FFT_BITS)];
 
-complex * fft_temp = A;
-complex * fft_vect = B;
+complex * fft_temp[MAX_SCREEN_WIDTH];
+complex * fft_vect[MAX_SCREEN_WIDTH];
 // Input in fft_vect, Output in fft_vect
 void fft_init(void)
 {
-  int i;
+  int i,x;
 
   for(i=0;i<(1<<FFT_BITS);i++) ROU[i] = cexp(TWO_PI*I*i/(1<<FFT_BITS));
+  for(x=0;x<MAX_SCREEN_WIDTH;x++) fft_temp[x] = A[x];
+  for(x=0;x<MAX_SCREEN_WIDTH;x++) fft_vect[x] = B[x];
 }
 
-void fft(void)
+void fft(int x)
 {
   int a,b,c;
   int i,k,pivot;
@@ -99,11 +99,11 @@ void fft(void)
 	  b = i - a;
 	  c = (a + (b<<1)) & two_to_bits_mo;
 
-	  fft_temp[i] = fft_vect[c] + fft_vect[c+pivot]*ROU[b];
+	  fft_temp[x][i] = fft_vect[x][c] + fft_vect[x][c+pivot]*ROU[b];
 	}
-      temp = fft_temp;
-      fft_temp = fft_vect;
-      fft_vect = temp;
+      temp = fft_temp[x];
+      fft_temp[x] = fft_vect[x];
+      fft_vect[x] = temp;
     }
 }
 
@@ -124,14 +124,13 @@ void refresh(void)
   if (SDL_MUSTLOCK(screen)) SDL_LockSurface(screen);
 }
 
-
 void screen_init(void)
 {
   SDL_Init(SDL_INIT_VIDEO);
   atexit(SDL_Quit);
   
   screen = SDL_SetVideoMode(SCREEN_WIDTH,SCREEN_HEIGHT, 32, SDL_SWSURFACE | SDL_RESIZABLE);
-  pnt = screen->pixels ;
+  pnt = screen->pixels;
   
   SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY,SDL_DEFAULT_REPEAT_INTERVAL);
   
@@ -175,6 +174,9 @@ void audio_callback(void * userdata, unsigned char * stream, int len)
     {
       for(y=0;y<SCREEN_HEIGHT;y++) point(audio_window_bar,y)^=0xffffff;
     }
+  pthread_mutex_lock(&audio_mutex);
+  refresh();
+  pthread_mutex_unlock(&audio_mutex);
   audio_window_bar = ((audio_current-audio_window_start)*SCREEN_WIDTH)/(audio_window_end-audio_window_start);
   if (audio_window_bar >= 0 && audio_window_bar < SCREEN_WIDTH)
     {
@@ -321,31 +323,106 @@ void apply_pole_filter(struct filter_t * filt, double * buffer, int size)
     }
 }
 
+struct strip_t
+{
+  int x;
+  long start;
+  long end;
+  long size;
+  int frame;
+  double * buffer;
+  double * window;
+};
+
+void * draw_fft_strip(void * arg)
+{
+  double small_buffer[BUFFER_SIZE];
+  long i,j,y,r,g,b;
+  double amp;
+
+  struct strip_t * param = arg;
+  
+  int x = param->x;
+  long start = param->start;
+  long end = param->end;
+  long size = param->size;
+  int frame = param->frame;
+  double * buffer = param->buffer;
+  double * window = param->window;
+
+  i = x * (end - start) / SCREEN_WIDTH + start;
+  for(j=0;j<BUFFER_SIZE;j++) 
+    {
+      if (i+j >= size)
+	small_buffer[j] = 0;
+      else
+	small_buffer[j] = buffer[size * frame + i+j];
+    }
+  for(j=0;j<BUFFER_SIZE;j++) fft_vect[x][j] = small_buffer[j] * window[j];
+  fft(x);
+  
+  for(y=0;y<SCREEN_HEIGHT;y++)
+    {
+      j = FREQ2INDEX(y*4000.0/SCREEN_HEIGHT);			
+      amp = fft_scale * cabs(fft_vect[x][j]);
+      i = x * (end - start) / SCREEN_WIDTH + start; 
+      
+      if (amp >= COLOR_THRESH) amp = 255 - (255*COLOR_THRESH - COLOR_THRESH*COLOR_THRESH)/amp; 
+      switch(color_scheme)
+	{
+	case CS_BLACK_ON_WHITE:
+	  i = amp;
+	  if (i >= 256) i = 255;
+	  point(x,SCREEN_HEIGHT - 1 - y) = (255 - i) * 0x010101;
+	  break;
+	case CS_WHITE_ON_BLACK:
+	  i = amp;
+	  if (i >= 256) i = 255;
+	  point(x,SCREEN_HEIGHT - 1 - y) = (i) * 0x010101;
+	  break;
+	case CS_HEAT:
+	  amp = amp*pal_colors/256.0;
+	  i = amp;
+	  if (i>=pal_colors) {i=pal_colors-1;amp=pal_colors;}	 
+	  
+	  r = 256*(pal[i+1][0]*(amp-i) + pal[i][0]*(i+1-amp));
+	  g = 256*(pal[i+1][1]*(amp-i) + pal[i][1]*(i+1-amp));
+	  b = 256*(pal[i+1][2]*(amp-i) + pal[i][2]*(i+1-amp));
+	  if (r>255) r = 255;
+	  if (g>255) g = 255;
+	  if (b>255) b = 255;
+	  
+	  if (r<0) r=0;
+	  if (g<0) g=0;
+	  if (b<0) b=0;
+	  point(x,SCREEN_HEIGHT - 1 - y) = r*0x10000 + g*0x100 + b;
+	  break;
+	}
+    }
+  return NULL;
+}
 
 void wview(double * buffer, long size, int frames)
 {
   SDL_Event event;
   long i,j,k,flag,x,y,old_y,r,g,b,c;
   long start,end,new_start,new_end;
+  struct strip_t param[MAX_SCREEN_WIDTH];
 
   int toggle = 1;
   int line_flag = 0;
   int root_flag = 0;
   int grid_flag = 0;
-  int warp_flag = 0;
   
   int selection_event = 1;
   int redraw_event = 1;
 
   char cmd_line[1000];
   double window[BUFFER_SIZE];
-  double small_buffer[BUFFER_SIZE];
-  double amp,mean,var,amp_max,phase,phase_offset;
+  double amp,mean,var,amp_max;
   double min[frames];
   double max[frames];
-
-  double ac[ORDER + 1];
-  double lpc[ORDER];
+  pthread_t thread[MAX_THREADS];
 
   double amp_1[SCREEN_HEIGHT];
   double amp_2[SCREEN_HEIGHT];
@@ -451,88 +528,24 @@ void wview(double * buffer, long size, int frames)
 	    case MODE_SPECT:
 	      for(x=0;x<SCREEN_WIDTH;x++)
 		{
-		  i = x * (end - start) / SCREEN_WIDTH + start;
-		  for(j=0;j<BUFFER_SIZE;j++) 
+		  param[x].x = x;
+		  param[x].start = start;
+		  param[x].end = end;
+		  param[x].size = size;
+		  param[x].frame = frame;
+		  param[x].buffer = buffer;
+		  param[x].window = window;
+
+		  pthread_create(&thread[x % MAX_THREADS], NULL, draw_fft_strip, &param[x]);
+		  if ((x % MAX_THREADS) == MAX_THREADS - 1)
 		    {
-		      if (i+j >= size)
-			small_buffer[j] = 0;
-		      else
-			small_buffer[j] = buffer[size * frame + i+j];
-		    }
-		  phase_offset = i+(window_size - 1)*0.5;		 
-		  for(j=0;j<BUFFER_SIZE;j++) fft_vect[j] = small_buffer[j] * window[j];
-		  switch (mode)
-		    {
-		    case MODE_SPECT:
-		      fft();
-		      break;
-		    }
-		  
-		  for(y=0;y<SCREEN_HEIGHT;y++)
-		    {
-		      j = FREQ2INDEX(y*4000.0/SCREEN_HEIGHT);			
-		      amp = fft_scale * cabs(fft_vect[j]);
-		      i = x * (end - start) / SCREEN_WIDTH + start; 
-		      phase = carg(fft_vect[j] * cexp(-TWO_PI*I*phase_offset/(1 << (FFT_BITS-1))));
-		      
-		      if (amp >= COLOR_THRESH) amp = 255 - (255*COLOR_THRESH - COLOR_THRESH*COLOR_THRESH)/amp; 
-		      switch(color_scheme)
-			{
-			case CS_BLACK_ON_WHITE:
-			  i = amp;
-			  if (i >= 256) i = 255;
-			  point(x,SCREEN_HEIGHT - 1 - y) = (255 - i) * 0x010101;
-			  break;
-			case CS_WHITE_ON_BLACK:
-			  i = amp;
-			  if (i >= 256) i = 255;
-			  point(x,SCREEN_HEIGHT - 1 - y) = (i) * 0x010101;
-			  break;
-			case CS_HEAT:
-			  amp = amp*pal_colors/256.0;
-			  i = amp;
-			  if (i>=pal_colors) {i=pal_colors-1;amp=pal_colors;}	 
-
-			  r = 256*(pal[i+1][0]*(amp-i) + pal[i][0]*(i+1-amp));
-			  g = 256*(pal[i+1][1]*(amp-i) + pal[i][1]*(i+1-amp));
-			  b = 256*(pal[i+1][2]*(amp-i) + pal[i][2]*(i+1-amp));
-			  if (r>255) r = 255;
-			  if (g>255) g = 255;
-			  if (b>255) b = 255;
-
-			  if (r<0) r=0;
-			  if (g<0) g=0;
-			  if (b<0) b=0;
-			  point(x,SCREEN_HEIGHT - 1 - y) = r*0x10000 + g*0x100 + b;
-			  break;
-			case CS_PHASE:
-			  r = g = b = 1.15470054;
-
-			  r+=cos(phase) * -0.70710678119;
-			  g+=cos(phase) *  0.70710678119;
-
-			  r+=sin(phase) *  0.40824829046;
-			  g+=sin(phase) *  0.40824829046;
-			  b+=sin(phase) * -0.81649658093;		  
-			  
-			  r*=amp;
-			  g*=amp;
-			  b*=amp;
-			  
-			  if (r<0) r=0;
-			  if (g<0) g=0;
-			  if (b<0) b=0;
-
-			  if (r>255) r = 255;
-			  if (g>255) g = 255;
-			  if (b>255) b = 255;
-
-			  point(x,SCREEN_HEIGHT - 1 - y) = (r<<16) + (g<<8) + b;
-			  break;
-			}
+		      for(i=0;i<MAX_THREADS;i++) pthread_join(thread[i], NULL);
 		    }
 		}
+	      if (x % MAX_THREADS)
+		for(i=0;i<x % MAX_THREADS;i++) pthread_join(thread[i], NULL);
 	      break;
+	      
 	    }
 	  //Draw bounds
 	  x = ((new_start-start)*SCREEN_WIDTH)/(end-start);      
@@ -693,11 +706,6 @@ void wview(double * buffer, long size, int frames)
 	      if (event.key.keysym.sym == SDLK_l) 
 		{
 		  line_flag = !line_flag;
-		  redraw_event = 1;
-		}
-	      if (event.key.keysym.sym == SDLK_w) 
-		{
-		  warp_flag = !warp_flag;		  
 		  redraw_event = 1;
 		}
 	      if (event.key.keysym.sym == SDLK_g) 
