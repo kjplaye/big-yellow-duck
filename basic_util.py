@@ -5,7 +5,10 @@ import pickle
 import random
 import numpy as np
 import scipy.stats
-from six.moves import xrange
+import tempfile
+import sys
+import os
+import pickle
 
 def dim(x):
     if isinstance(x,str):
@@ -16,7 +19,7 @@ def dim(x):
         return 0
 
 def blockup(x,n):
-    return [x[i:i+n] for i in xrange(0,len(x)-n+1,n)]
+    return [x[i:i+n] for i in range(0,len(x)-n+1,n)]
 
 
 def rotate(x,n):
@@ -31,7 +34,7 @@ def reverse_it(x):
         return L
 
 def delta(x,d = 1):
-    return [x[i+d] - x[i] for i in xrange(len(x) - d)]
+    return [x[i+d] - x[i] for i in range(len(x) - d)]
 
 def flatten(x):
     if dim(x)==2:
@@ -42,7 +45,8 @@ def flatten(x):
         return x
 
 def sortby(x,L):
-    return transpose(sorted(transpose([L,x])))[1]
+    E = sorted([[x[i],L[i]] for i in range(len(x))],cmp = lambda a,b: 1-2*(a[1] < b[1]))
+    return([e[0] for e in E])
 
 def shuffle_it(x):
     y = x[:]
@@ -53,10 +57,6 @@ def dither(x,e = 0.5):
   a = np.array(x)
   n = np.random.random(a.shape) * e
   return a + n
-
-
-
-
 
 def pval(x):
     if hasattr(x,'pval'):
@@ -70,7 +70,7 @@ def bits(x):
     if hasattr(x,'pval'):
         return -math.log(x.pval(),2)
 
-    
+
 def entropy(x):
     c = dict()
     T = 0
@@ -86,27 +86,21 @@ class form_table_result(col):
     def bits(self):
         x, p, dof, ex = scipy.stats.chi2_contingency(self)
         return -scipy.stats.chi2.logsf(x,dof) / math.log(2)
+    def chi_sqr_components(self):
+        x, p, dof, ex = scipy.stats.chi2_contingency(self)
+        a = np.array(self)
+        return (a - ex)**2 / ex
         
 def form_table(L,rowkeys = None,colkeys = None):
-    if rowkeys == None:
-      SL = set()
-      for l in L:
-        if l[0] not in SL:
-          SL.add(l[0])
-      rowkeys = sorted(list(SL))
-    VL = {rowkeys[i]:i for i in range(len(rowkeys))}
-    if colkeys == None:
-      SR = set()
-      for l in L:
-        if l[1] not in SR:
-          SR.add(l[1])
-      colkeys = sorted(list(SR))
-    VR = {colkeys[i]:i for i in range(len(colkeys))}
-    T = [[0 for j in range(len(colkeys))]  for i in range(len(rowkeys))]
-    for l in L:
-        T[VL[l[0]]][VR[l[1]]] += 1
-    TAB = form_table_result(T)
-    return TAB
+  def pval(self):
+    return scipy.stats.chi2_contingency(self)[1]
+  def bits(self):
+    x, p, dof, ex = scipy.stats.chi2_contingency(self)
+    return -scipy.stats.chi2.logsf(x,dof) / math.log(2)
+  def labeled(self):
+    m = len(self)
+    n = len(self[0])
+    return col([['',''] + [self.colkeys[j] for j in range(n)]] + [['',''] + ['-' for j in range(n)]] + [[self.rowkeys[i],':'] + [self[i][j] for j in range(n)] for i in range(m)])
 
 class myhist_result(col):
     def pval(self):
@@ -125,6 +119,16 @@ def myhist(x,sortit = True):
     KV = sorted(KV,key = lambda x:x[1])
   return myhist_result(KV)
 
+def pick_save(file_name,x):
+  open(file_name,'w').write(pickle.dumps(x))
 
+def pick_load(file_name):
+  return pickle.loads(open(file_name).read())
 
+def h_pad(L,padn = 5, padv = -1):
+  n = L[0].shape[1]
+  L0 = sum([[L[i],padv + np.zeros([padn,n])] for i in range(len(L)-1)],[]) + [L[-1]]
+  return np.concatenate(L0)
 
+def v_pad(L,padn = 5, padv = -1):
+  return h_pad([e.T for e in L],padn = padn, padv = padv).T

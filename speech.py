@@ -76,9 +76,9 @@ class pcm_array(numpy.ndarray):
         E = E * E
         T = numpy.zeros(len(E)-window)
         T[0] = sum(E[0:window])
-        for i in xrange(1,len(E)-window):
+        for i in range(1,len(E)-window):
             T[i] = T[i-1] - E[i-1] + E[i+window-1]
-        P = [i for i in xrange(0,len(T)) if T[i] >= thresh]    
+        P = [i for i in range(0,len(T)) if T[i] >= thresh]    
         if P:
             return pcm(self[max(0,P[0]-window):min(len(self),P[-1]+2*window)])
     def split(self,window = 160,thresh = 0.25):
@@ -88,11 +88,11 @@ class pcm_array(numpy.ndarray):
         E = E * E
         T = numpy.zeros(len(E)-window)
         T[0] = sum(E[0:window])
-        for i in xrange(1,len(E)-window):
+        for i in range(1,len(E)-window):
             T[i] = T[i-1] - E[i-1] + E[i+window-1]
         begin_i = 0
         ans = []
-        for i in xrange(1,len(T)):
+        for i in range(1,len(T)):
             if T[i] < thresh and T[i-1] >= thresh:
                 ans.append(pcm(self[begin_i:i+window]))
                 begin_i = None
@@ -114,8 +114,8 @@ class pcm_array(numpy.ndarray):
             data = self.autoscale()
         else:
             data = self
-        x = [0 for i in xrange(0,len(data)*2)]
-        for i in xrange(0,len(data)):
+        x = [0 for i in range(0,len(data)*2)]
+        for i in range(0,len(data)):
             val = int(data[i] * 32767)
             if val < 0:
                 val+=0x10000
@@ -159,9 +159,9 @@ class pcm_array(numpy.ndarray):
         """ show gain contour
         """
         E = [e*e for e in self]
-        T = [0 for i in xrange(0,len(E)-window)]
+        T = [0 for i in range(0,len(E)-window)]
         T[0] = sum(E[0:window])
-        for i in xrange(1,len(E)-window):
+        for i in range(1,len(E)-window):
             T[i] = T[i-1] - E[i-1] + E[i+window-1]
         gnuplot.plot_list(T)
 
@@ -190,7 +190,7 @@ def pcm(filename=None, format = 'S16_LE'):
         f.close()
         if format == 'S16_LE':
             x = pcm_array(len(data)/2)
-            for i in xrange(0,len(data),2):
+            for i in range(0,len(data),2):
                 val = ord(data[i]) + ord(data[i+1]) * 256
                 if val >= 0x8000:
                     x[i/2] = (val - 0x10000)/32768.0
@@ -199,7 +199,7 @@ def pcm(filename=None, format = 'S16_LE'):
             return x
         elif format == 'S8':
             x = pcm_array(len(data))
-            for i in xrange(0,len(data)):
+            for i in range(0,len(data)):
                 val = ord(data[i])
                 if val >= 0x80:
                     x[i] = (val - 256)/128.0
@@ -208,17 +208,17 @@ def pcm(filename=None, format = 'S16_LE'):
             return x
         elif format == 'U8':
             x = pcm_array(len(data))
-            for i in xrange(0,len(data)):
+            for i in range(0,len(data)):
                 val = ord(data[i])
                 x[i] = (val - 128)/128.0
             return x
         elif format == '8':
             aS = pcm(filename,format = 'S8')
-            aS_del = pcm([aS[i+1] - aS[i] for i in xrange(len(aS)-1)])
+            aS_del = pcm([aS[i+1] - aS[i] for i in range(len(aS)-1)])
             aS_del_energy = sum(aS_del * aS_del)
 
             aU = pcm(filename,format = 'U8')
-            aU_del = pcm([aU[i+1] - aU[i] for i in xrange(len(aU)-1)])
+            aU_del = pcm([aU[i+1] - aU[i] for i in range(len(aU)-1)])
             aU_del_energy = sum(aU_del * aU_del)
 
             return aS if aS_del_energy < aU_del_energy else aU
@@ -234,7 +234,7 @@ def pcm(filename=None, format = 'S16_LE'):
 class zero_filt(list):
     def __init__(self,the_coefficients = [1.0]):
         list.__init__(self,the_coefficients)        
-        self.memory = [0.0 for i in xrange(0,len(self))]
+        self.memory = [0.0 for i in range(0,len(self))]
     def __mul__(self,buffer):
         temp_mem    = (c_double * len(self.memory))()
         temp_coef   = (c_double * len(self))()
@@ -248,14 +248,14 @@ class zero_filt(list):
         self[:] = temp_coef[:]        
         return buffer
     def reset(self):
-        self.memory = [0.0 for i in xrange(0,len(self))]
+        self.memory = [0.0 for i in range(0,len(self))]
 
 class pole_filt(list):
     def __init__(self,the_coefficients = [1.0]):
         if the_coefficients[0] != 1.0:
             raise Exception('Make sure the first coefficient is 1.0 please')
         list.__init__(self,the_coefficients)
-        self.memory = [0.0 for i in xrange(0,len(self))]
+        self.memory = [0.0 for i in range(0,len(self))]
     def __mul__(self,buffer):
 
         temp_mem    = (c_double * len(self.memory))()
@@ -270,7 +270,7 @@ class pole_filt(list):
         self[:] = temp_coef[:]                    
         return buffer
     def reset(self):
-        self.memory = [0.0 for i in xrange(0,len(self))]
+        self.memory = [0.0 for i in range(0,len(self))]
 
 
 class filt:
@@ -291,9 +291,9 @@ class filt:
         """
         dots = 4000
         z = (math.exp(1)) ** (1J * math.pi / dots)
-        A = [math.log(abs(sum([z**((i+1)*j) * self.zero_filter[j] for j in xrange(0,len(self.zero_filter))]))) for i in xrange(0,dots)]
-        B = [math.log(abs(sum([z**((i+1)*j) * self.pole_filter[j] for j in xrange(0,len(self.pole_filter))]))) for i in xrange(0,dots)]
-        gnuplot.plot_list([A[i] - B[i] for i in xrange(0,dots)])
+        A = [math.log(abs(sum([z**((i+1)*j) * self.zero_filter[j] for j in range(0,len(self.zero_filter))]))) for i in range(0,dots)]
+        B = [math.log(abs(sum([z**((i+1)*j) * self.pole_filter[j] for j in range(0,len(self.pole_filter))]))) for i in range(0,dots)]
+        gnuplot.plot_list([A[i] - B[i] for i in range(0,dots)])
     def reset(self):
         self.zero_filter.reset()
         self.pole_filter.reset()
@@ -337,7 +337,7 @@ class lp_model:
     hamming_window = dict() #All instances *should* update this
     def ac2lpc(self):
         #Do Durbin Recursion        
-        self.lpc = [0 for i in xrange(0,self.order)]
+        self.lpc = [0 for i in range(0,self.order)]
 
         temp_ac = (c_double * len(self.ac))()
         temp_lpc = (c_double * self.order)()
@@ -348,7 +348,7 @@ class lp_model:
         self.lpc[:] = temp_lpc[:]
 
     def lpc2cepst(self):
-        self.cepst = [0 for i in xrange(0,self.order)]
+        self.cepst = [0 for i in range(0,self.order)]
 
         temp_cepst = (c_double * self.order)()
         temp_lpc = (c_double * self.order)()
@@ -362,18 +362,18 @@ class lp_model:
         # Newton's method: 
         #  x ---> x - f(x)/f'(x)
         roots_found = 0;
-        self.root = [0 for i in xrange(0,self.order)]
-        for i in xrange(0,max_try):
+        self.root = [0 for i in range(0,self.order)]
+        for i in range(0,max_try):
             if roots_found >= self.order:
                 break            
             x = ((4.0*random.random()) - 2) + ((4.0*random.random()) - 2)*1J
-            for j in xrange(0,max_iter):
+            for j in range(0,max_iter):
                 last_x = x
 
                 pow_x = 1
                 f = 1
                 f_prime = 0
-                for k in xrange(0,self.order):
+                for k in range(0,self.order):
                     f_prime += pow_x * -self.lpc[k] * (k+1);
                     pow_x *= x;
                     f += pow_x * -self.lpc[k];
@@ -388,7 +388,7 @@ class lp_model:
                     if (x.imag < 0):
                         x = x.conjugate()
                     no_match_flag = True
-                    for k in xrange(0,roots_found):
+                    for k in range(0,roots_found):
                         if (abs(x - self.root[k]) < root_eps):
                             no_match_flag = False
                             break
@@ -433,9 +433,9 @@ class lp_model:
         R = [[r.real,r.imag] for r in self.root + [e.conjugate() for e in self.root]]
         bw_rad = 0.9245
         dots = 1000
-        C1 = [[bw_rad * math.cos(2*3.141*i/dots), bw_rad * math.sin(2*3.141*i/dots)] for i in xrange(0,dots)]
-        C2 = [[math.cos(2*3.141*i/dots), math.sin(2*3.141*i/dots)] for i in xrange(0,dots)]
-        gnuplot.plot_lists([C2,C1,R],the_options=['title \"\"' for i in xrange(0,3)])
+        C1 = [[bw_rad * math.cos(2*3.141*i/dots), bw_rad * math.sin(2*3.141*i/dots)] for i in range(0,dots)]
+        C2 = [[math.cos(2*3.141*i/dots), math.sin(2*3.141*i/dots)] for i in range(0,dots)]
+        gnuplot.plot_lists([C2,C1,R],the_options=['title \"\"' for i in range(0,3)])
 
     def show2(self):
         """ display the log spectral magnitude of the vocal tract filter
@@ -461,12 +461,12 @@ class excitation_model:
             maxi = 20
             the_max = 0;
             ans = 0
-            for i in xrange(20,len(auto_c)):
+            for i in range(20,len(auto_c)):
                 temp = auto_c[i]
                 if temp > the_max:
                     the_max = temp
                     maxi = i
-            for i in xrange(len(data)):
+            for i in range(len(data)):
                 temp = data[i]
                 ans = ans + temp * temp
 
@@ -503,7 +503,7 @@ class vocoder(list):
             else:
                 residual = pcm([0.0 for e in data])
             list.__init__(self,[])
-            for i in xrange(self.frame_length/2,len(new_data) - self.frame_length/2,self.frame_step):
+            for i in range(self.frame_length/2,len(new_data) - self.frame_length/2,self.frame_step):
                 a = i-self.frame_step/2
                 b = i+self.frame_step/2
                 a2 = i-self.frame_length/2
@@ -516,7 +516,7 @@ class vocoder(list):
                 residual[a:b] = f * residual[a:b]
                 self.append([lp_m,None])
             count = 0
-            for i in xrange(self.frame_length/2,len(new_data) - self.frame_length/2,self.frame_step):
+            for i in range(self.frame_length/2,len(new_data) - self.frame_length/2,self.frame_step):
                 a = i-self.frame_step/2
                 b = i+self.frame_step/2
                 a2 = i-self.frame_length/2
