@@ -330,7 +330,7 @@ int imagesc(double * data, long long data_len, long long width, long long frames
 		  alpha = ZOOM_RATIO;
 		  break;
 		case SDL_BUTTON_MIDDLE:
-		  printf("PRESS RETURN...laptop has ackward middle or something\n");
+		  printf("PRESS RETURN...laptop has awkward middle or something\n");
 		  break;
 		case SDL_BUTTON_WHEELUP:
 		  alpha = 1/ZOOM_RATIO;

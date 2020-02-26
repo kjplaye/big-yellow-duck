@@ -30,7 +30,7 @@ ones_R = ones.reshape(len(ones),28*28)
 #Spin it around
 #color some middle guys and bring back to python
 cl = np.array(ggobi(U[:,:20])  )
-from Collections import Counter
+from collections import Counter
 Counter(cl)
 
 #View middle guys
