@@ -90,18 +90,31 @@ class form_table_result(col):
         x, p, dof, ex = scipy.stats.chi2_contingency(self)
         a = np.array(self)
         return (a - ex)**2 / ex
+    def labeled(self):
+        m = len(self)
+        n = len(self[0])
+        return col([['',''] + [self.colkeys[j] for j in range(n)]] + [['',''] + ['-' for j in range(n)]] + [[self.rowkeys[i],':'] + [self[i][j] for j in range(n)] for i in range(m)])
+                  
         
-def form_table(L,rowkeys = None,colkeys = None):
-  def pval(self):
-    return scipy.stats.chi2_contingency(self)[1]
-  def bits(self):
-    x, p, dof, ex = scipy.stats.chi2_contingency(self)
-    return -scipy.stats.chi2.logsf(x,dof) / math.log(2)
-  def labeled(self):
-    m = len(self)
-    n = len(self[0])
-    return col([['',''] + [self.colkeys[j] for j in range(n)]] + [['',''] + ['-' for j in range(n)]] + [[self.rowkeys[i],':'] + [self[i][j] for j in range(n)] for i in range(m)])
+def form_table(L,rowkeys = [],colkeys = []):
+    rowkeys = set(rowkeys)
+    colkeys = set(colkeys)
+    for e in L:
+        rowkeys.add(e[0])
+        colkeys.add(e[1])
+    rowkeys = sorted(list(rowkeys))
+    colkeys = sorted(list(colkeys))
+    rowdict = {rowkeys[i]:i for i in range(len(rowkeys))}
+    coldict = {colkeys[i]:i for i in range(len(colkeys))}
+    ans = [[0 for j in range(len(colkeys))] for i in range(len(rowkeys))]
+    for e in L:
+        ans[rowdict[e[0]]][coldict[e[1]]] += 1
+    res = form_table_result(ans)
+    res.rowkeys = rowkeys
+    res.colkeys = colkeys
+    return res
 
+    
 class myhist_result(col):
     def pval(self):
         C = [e[1] for e in self]
@@ -120,10 +133,10 @@ def myhist(x,sortit = True):
   return myhist_result(KV)
 
 def pick_save(file_name,x):
-  open(file_name,'w').write(pickle.dumps(x))
+  open(file_name,'wb').write(pickle.dumps(x))
 
 def pick_load(file_name):
-  return pickle.loads(open(file_name).read())
+  return pickle.loads(open(file_name,'rb').read())
 
 def h_pad(L,padn = 5, padv = -1):
   n = L[0].shape[1]
@@ -132,3 +145,6 @@ def h_pad(L,padn = 5, padv = -1):
 
 def v_pad(L,padn = 5, padv = -1):
   return h_pad([e.T for e in L],padn = padn, padv = padv).T
+
+def lmap(f,L):
+    return list(map(f,L))

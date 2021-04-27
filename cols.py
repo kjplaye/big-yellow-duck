@@ -12,7 +12,7 @@ class col(list):
         n = len(self[0])
         return col([[self[i][j] for i in range(m)] for j in range(n)])
     def __repr__(self):
-        L = [map(str,l) for l in self]
+        L = [list(map(str,l)) for l in self]
         FL = [1] * len(self[0])
         for l in L:
             for i in range(len(FL)):                

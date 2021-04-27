@@ -305,7 +305,7 @@ int imagesc(double * data, long long data_len, long long width, long long frames
 		    printf("Nothing here\n");
 		  break;
 		case SDLK_COMMA:
-		  if (--frame_number<0) frame_number = 0;
+		  if (--frame_number<0) frame_number = 0;		  
 		  printf("Frame = %lld\n",frame_number);
 		  redraw_flag = 1;
 		  break;

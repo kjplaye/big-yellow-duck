@@ -35,7 +35,7 @@ def ggobi(X, cl = None, smallest_glyph = 'auto'):
     >>> D = V[cl_in] + np.array([X,Y,np.zeros(2000),bit]).T + N
     >>> cl_out = ggobi(D,cl_in)
     """
-    if cl == None:
+    if type(cl) == type(None):
         cl = [0] * len(X)
     # Use colors, shapes, and sizes in a hopefully diverse and useful order
     # We choose "." as default shape at smallest size for speed on large data
@@ -50,7 +50,7 @@ def ggobi(X, cl = None, smallest_glyph = 'auto'):
     if use_pixil_glyph:
         glyph = ['. 1'] + glyph
     label = ['color="%s" glyph="%s"' % (c,g)  for g in glyph for c in color]
-    CL = [label[c] for c in cl]
+    CL = [label[int(c)] for c in cl]
     m = len(X)
     n = len(X[0])
     x = ''
@@ -75,7 +75,7 @@ def ggobi(X, cl = None, smallest_glyph = 'auto'):
     x += '</data>\n'
     x += '</ggobidata>\n'
     f = tempfile.NamedTemporaryFile(suffix = '.xml')
-    f.write(x)
+    f.write(bytes(x.encode()))
     f.flush()
     print('Save brushed output as %s.xml' % f.name[:-4])
     p = Popen(['ggobi',f.name])
