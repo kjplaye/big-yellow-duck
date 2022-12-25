@@ -128,20 +128,24 @@ void refresh()
   SDL_RenderPresent(renderer);
 }
 
-void screen_init(void)
+void screen_init(int init)
 {
-  SDL_Init(SDL_INIT_VIDEO);
-  atexit(SDL_Quit);
+  if (init)
+    {
+      SDL_Init(SDL_INIT_VIDEO);
+      atexit(SDL_Quit);
+      screen = SDL_CreateWindow("imagesc",SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+				SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE);
+      renderer = SDL_CreateRenderer(screen, -1, 0);
+    }
   
-  screen = SDL_CreateWindow("imagesc",SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-			    SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE);
-  renderer = SDL_CreateRenderer(screen, -1, 0);
   SDL_RenderClear(renderer);
   SDL_GL_SwapWindow(screen);    
   texture = SDL_CreateTexture(renderer,SDL_PIXELFORMAT_ARGB8888,
 			      SDL_TEXTUREACCESS_STREAMING,
 			      SCREEN_WIDTH, SCREEN_HEIGHT);
-  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");  // make the scaled rendering look smoother.
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,
+	      "linear");  // make the scaled rendering look smoother.
   SDL_RenderSetLogicalSize(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
 
   if (pnt) free(pnt);
@@ -450,7 +454,7 @@ void wview(double * buffer, long size, int frames)
   if (size <= 0) return;
   if (frames <= 0) return;
 
-  screen_init();
+  screen_init(1);
   refresh();
   fft_init();
   window_init(window);
@@ -616,17 +620,7 @@ void wview(double * buffer, long size, int frames)
 		{
 		  SCREEN_WIDTH = event.window.data1;
 		  SCREEN_HEIGHT = event.window.data2;
-		  SDL_RenderClear(renderer);
-		  SDL_GL_SwapWindow(screen);    
-		  texture = SDL_CreateTexture(renderer,SDL_PIXELFORMAT_ARGB8888,
-					      SDL_TEXTUREACCESS_STREAMING,
-					      SCREEN_WIDTH, SCREEN_HEIGHT);
-		  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");  // make the scaled rendering look smoother.
-		  SDL_RenderSetLogicalSize(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
-		  
-		  if (pnt) free(pnt);
-		  if ((pnt = malloc(SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(unsigned))) == 0)
-		    {fprintf(stderr, "OUT OF MEMORY");exit(1);}
+		  screen_init(0);
 		  redraw_event = 1;
 		}
 	      break;
