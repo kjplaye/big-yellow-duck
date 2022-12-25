@@ -1,5 +1,6 @@
+#include <SDL2/SDL.h>
+
 #include <math.h>
-#include <SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <complex.h>
@@ -41,7 +42,9 @@ int color_scheme = CS_BLACK_ON_WHITE;
 #define FREQ2INDEX(f) ((int)HZ2INDEX(f))
 
 #define point(x,y) pnt[(int)(x)+(int)(y)*SCREEN_WIDTH]
-SDL_Surface *screen;
+SDL_Window *screen;
+SDL_Renderer * renderer;
+SDL_Texture * texture;
 unsigned * pnt;
 
 #define MAX_SCREEN_WIDTH 10000
@@ -117,11 +120,12 @@ void window_init(double * window)
     }
 }
 
-void refresh(void)
+void refresh()
 {
-  if (SDL_MUSTLOCK(screen)) SDL_UnlockSurface(screen);
-  SDL_UpdateRect(screen,0,0,0,0);
-  if (SDL_MUSTLOCK(screen)) SDL_LockSurface(screen);
+  SDL_UpdateTexture(texture, NULL, pnt, SCREEN_WIDTH * sizeof(unsigned));
+  SDL_RenderClear(renderer);
+  SDL_RenderCopy(renderer, texture, NULL, NULL);
+  SDL_RenderPresent(renderer);
 }
 
 void screen_init(void)
@@ -129,12 +133,20 @@ void screen_init(void)
   SDL_Init(SDL_INIT_VIDEO);
   atexit(SDL_Quit);
   
-  screen = SDL_SetVideoMode(SCREEN_WIDTH,SCREEN_HEIGHT, 32, SDL_SWSURFACE | SDL_RESIZABLE);
-  pnt = screen->pixels;
-  
-  SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY,SDL_DEFAULT_REPEAT_INTERVAL);
-  
-  if ( SDL_MUSTLOCK(screen) ) SDL_LockSurface(screen);
+  screen = SDL_CreateWindow("imagesc",SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+			    SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE);
+  renderer = SDL_CreateRenderer(screen, -1, 0);
+  SDL_RenderClear(renderer);
+  SDL_GL_SwapWindow(screen);    
+  texture = SDL_CreateTexture(renderer,SDL_PIXELFORMAT_ARGB8888,
+			      SDL_TEXTUREACCESS_STREAMING,
+			      SCREEN_WIDTH, SCREEN_HEIGHT);
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");  // make the scaled rendering look smoother.
+  SDL_RenderSetLogicalSize(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+  if (pnt) free(pnt);
+  if ((pnt = malloc(SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(unsigned))) == 0)
+    {fprintf(stderr, "OUT OF MEMORY");exit(1);}
 }
 
 double * audio_buffer;
@@ -599,11 +611,24 @@ void wview(double * buffer, long size, int frames)
 	    }	  
 	  switch(event.type)
 	    {
-	    case SDL_VIDEORESIZE:
-	      SCREEN_WIDTH = event.resize.w;
-	      SCREEN_HEIGHT = event.resize.h;
-	      screen_init();
-	      redraw_event = 1;
+	    case SDL_WINDOWEVENT:
+	      if (event.window.event == SDL_WINDOWEVENT_RESIZED)
+		{
+		  SCREEN_WIDTH = event.window.data1;
+		  SCREEN_HEIGHT = event.window.data2;
+		  SDL_RenderClear(renderer);
+		  SDL_GL_SwapWindow(screen);    
+		  texture = SDL_CreateTexture(renderer,SDL_PIXELFORMAT_ARGB8888,
+					      SDL_TEXTUREACCESS_STREAMING,
+					      SCREEN_WIDTH, SCREEN_HEIGHT);
+		  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");  // make the scaled rendering look smoother.
+		  SDL_RenderSetLogicalSize(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
+		  
+		  if (pnt) free(pnt);
+		  if ((pnt = malloc(SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(unsigned))) == 0)
+		    {fprintf(stderr, "OUT OF MEMORY");exit(1);}
+		  redraw_event = 1;
+		}
 	      break;
 	    case SDL_KEYDOWN:
 	      if (event.key.keysym.sym == SDLK_LEFTBRACKET) 
@@ -764,11 +789,6 @@ void wview(double * buffer, long size, int frames)
 		  redraw_event = 1;
 		}
 	      if (event.key.keysym.sym == SDLK_ESCAPE) flag = 0;
-	      if (event.key.keysym.sym == SDLK_TAB) 
-		{
-		  toggle = !toggle;
-		  SDL_WM_ToggleFullScreen(screen);
-		}
 	      break;
 	    case SDL_MOUSEBUTTONDOWN:
 	      switch(event.button.button)
