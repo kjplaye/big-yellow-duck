@@ -93,7 +93,10 @@ int imagesc(double * data, long long data_len, long long width, long long frames
 
   long long last_x,last_y;
   int last_mouse_x = 0, last_mouse_y = 0;
- 
+  int aspect_state = 0;
+  int aspect_original_x = 0;
+  int aspect_original_y = 0;
+  
   screen_init(1);
 
   max = data[0];
@@ -226,6 +229,36 @@ int imagesc(double * data, long long data_len, long long width, long long frames
 		  printf("Color mode = %d\n",color_mode);
 		  redraw_flag = 1;
 		  break;
+		 case SDLK_a:
+                  switch(aspect_state) {
+                    case 0:
+                      aspect_original_x = SCREEN_WIDTH;
+                      aspect_original_y = SCREEN_HEIGHT;
+                      if (SCREEN_WIDTH > SCREEN_HEIGHT)
+                        SCREEN_WIDTH = SCREEN_HEIGHT;
+                      else
+                        SCREEN_HEIGHT = SCREEN_WIDTH;
+                      aspect_state = 1;
+                      break;
+                    case 1:
+                      SCREEN_WIDTH = aspect_original_x;
+                      SCREEN_HEIGHT = aspect_original_y;
+                      if (SCREEN_WIDTH < SCREEN_HEIGHT)
+                        SCREEN_WIDTH = SCREEN_HEIGHT;
+                      else
+                        SCREEN_HEIGHT = SCREEN_WIDTH;
+                      aspect_state = 2;
+                      break;
+                    case 2:
+                      SCREEN_WIDTH = aspect_original_x;
+                      SCREEN_HEIGHT = aspect_original_y;
+                      aspect_state = 0;
+                      break;                                  
+                  }
+                  SDL_SetWindowSize(screen, SCREEN_WIDTH, SCREEN_HEIGHT);
+                  screen_init(0);
+                  redraw_flag = 1;
+                  break;
 		case SDLK_PAGEUP:
 		  v1 = (win_x0 + win_x1) / 2.0;
 		  v2 = (win_x1 - win_x0) * ZOOM_RATIO;
