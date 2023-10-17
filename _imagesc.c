@@ -8,6 +8,8 @@
 #define MAX_ROWS 100000
 #define POWER_STEP 1.2
 #define NULL_COLOR 0x305050
+#define INF_COLOR 0x905050
+#define NAN_COLOR 0x406060
 #define ZOOM_RATIO 1.2
 #define PAN_RATIO 0.3
 #define COLOR_MODES 5
@@ -44,14 +46,14 @@ void refresh()
   SDL_RenderPresent(renderer);
 }
 
-void screen_init(int init)
+void screen_init(int init, char * name)
 {
   if (init)
     {
       SDL_Init(SDL_INIT_VIDEO);
       atexit(SDL_Quit);
       
-      screen = SDL_CreateWindow("imagesc",SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+      screen = SDL_CreateWindow(name, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
 				SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE);
       renderer = SDL_CreateRenderer(screen, -1, 0);
     }
@@ -69,7 +71,7 @@ void screen_init(int init)
     {fprintf(stderr, "OUT OF MEMORY");exit(1);}
 }
 
-int imagesc(double * data, long long data_len, long long width, long long frames)
+int imagesc(double * data, long long data_len, long long width, long long frames, char * name)
 {
   long long i;
   double max, min, amp, power, temp;
@@ -97,7 +99,7 @@ int imagesc(double * data, long long data_len, long long width, long long frames
   int aspect_original_x = 0;
   int aspect_original_y = 0;
   
-  screen_init(1);
+  screen_init(1, name);
 
   max = data[0];
   min = data[0];
@@ -125,7 +127,11 @@ int imagesc(double * data, long long data_len, long long width, long long frames
 		yy = (y * (win_y1 - win_y0)) / SCREEN_HEIGHT + win_y0;
 		zz = (long long)(yy * lines) * width + (long long)(xx * width);
 		if (xx < 0 | yy < 0 | xx >= 1 | zz >= data_len)
-		  point(x,y) = NULL_COLOR;
+		  point(x,y) = NULL_COLOR;   	 
+		else if (isnan(data[zz + (long long) frame_number * data_len]))
+		  point(x,y) = NAN_COLOR;
+		else if (isinf(data[zz + (long long) frame_number * data_len]))
+		  point(x,y) = INF_COLOR;
 		else
 		  {
 		    zz2 = zz;
@@ -209,7 +215,7 @@ int imagesc(double * data, long long data_len, long long width, long long frames
 		{
 		  SCREEN_WIDTH = event.window.data1;
 		  SCREEN_HEIGHT = event.window.data2;
-		  screen_init(0);
+		  screen_init(0, name);
 		  redraw_flag = 1;
 		}
 	      break;
@@ -256,7 +262,7 @@ int imagesc(double * data, long long data_len, long long width, long long frames
                       break;                                  
                   }
                   SDL_SetWindowSize(screen, SCREEN_WIDTH, SCREEN_HEIGHT);
-                  screen_init(0);
+                  screen_init(0, name);
                   redraw_flag = 1;
                   break;
 		case SDLK_PAGEUP:
