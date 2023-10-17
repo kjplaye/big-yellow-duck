@@ -81,7 +81,7 @@ class pca:
     def plot_diag(self):
     	plt.plot(self.D,'o', color = 'blue')
     	plt.plot(self.D,'.', color = 'red')
-    	plt.plot([self.max_sv_mean]*len(self.D), color = 'green')
+    	plt.plot([self.get_mp_threshold()]*len(self.D), color = 'green')
     	plt.ylabel("Singular Values")
     	plt.xlabel("Rank")
     def ggobi(self, input_clusters = None, dims = 20):
