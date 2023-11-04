@@ -1233,12 +1233,13 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
   int mouse_x, mouse_y;
   int was_delay = 0;
   unsigned frame_time = 0;
+  int mouse_motion_occured = 0;
   while(flag)
     {
       unsigned frame_start = SDL_GetTicks();
 
       // Non-event driven rotation
-      if (rotation_mode)
+      if (rotation_mode & !mouse_motion_occured)
 	{
 	  SO_rotate(KEYBOARD_ROTATION_DX, KEYBOARD_ROTATION_DY);
 	  refresh_flag = 1;
@@ -1247,7 +1248,7 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
       // Refresh logic
       if (refresh_flag)
 	{
-	  // Point Screen
+	  // Point Screen	  
 	  for(int x=0;x<SCREEN_WIDTH[POINT_SCREEN];x++)
 	    for(int y=0;y<SCREEN_WIDTH[POINT_SCREEN];y++) point(POINT_SCREEN,x,y)=0;
 	  draw_points(num_data, data, color, hide);
@@ -1262,7 +1263,7 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 	  refresh(BRUSH_SCREEN);
 	}
       refresh_flag = 0;
-      
+      mouse_motion_occured = 0;
       // Event loop, suppress mouse motions.
       if (SDL_PollEvent(&event))
 	{
@@ -1416,9 +1417,13 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		  break;		 
 		}
 	    case SDL_MOUSEMOTION:
-	      if (frame_time > 0) continue;
+	      if (frame_time != 0)
+		{
+		  mouse_motion_occured = 1;
+		  continue;
+		}
 	      SDL_GetMouseState(&mouse_x, &mouse_y);
-  	      if (event.window.windowID ==
+	      if (event.window.windowID ==
 		  SDL_GetWindowID(screen[POINT_SCREEN]))
 		{
 		  service_mouse_motion_on_point(event.button.x, event.button.y,
@@ -1467,6 +1472,3 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 
   SDL_Quit();
 }
-
-// TODO
-// * MOUSE MOTION delay thing is changing rotation speed
