@@ -6,6 +6,7 @@ import numpy as np
 from imagesc import imagesc
 from wview import wview
 from ggobi import *
+from mojave import mojave
 
 def plotn(x):
     """

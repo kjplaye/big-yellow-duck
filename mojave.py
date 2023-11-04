@@ -36,6 +36,8 @@ def mojave(X, cl = None, name = 'Mojave'):
     X1[:,delta == 0] = 0
     Xa = np.require(X1, dtype = 'float64')
     Xp = Xa.ctypes._as_parameter_
+    if cl is None:
+        cl = np.zeros(len(X))
     cl_a = np.require(cl, dtype = 'int32').copy()
     cl_p = cl_a.ctypes._as_parameter_
     _mojave.mojave(Xp, cl_p, Xa.shape[0], Xa.shape[1], window_name_bytes)
