@@ -19,7 +19,7 @@
 #define FPS 60
 #define FRAME_DELAY (1000 / FPS)
 
-#define IMAGE_BRUSH_FILE "/home/kevin/big-yellow-duck/mojave_brush.bmp"
+#define IMAGE_ERASE_FILE "/home/kevin/big-yellow-duck/mojave_erase.bmp"
 #define IMAGE_PALETTE_FILE "/home/kevin/big-yellow-duck/mojave_palette.bmp"
 #define IMAGE_ROTATION_FILE "/home/kevin/big-yellow-duck/mojave_rotation.bmp"
 
@@ -97,7 +97,7 @@
 #define KEYBOARD_ROTATION_DX 0
 #define KEYBOARD_ROTATION_DY 10
 #define UNDO_SIZE 1024
-#define MAX_TEXT_NUMBER 100
+#define MAX_TEXT_NUMBER 256
 #define GRID_COLOR 0x808080
 
 #define SQR(x) ((x)*(x))
@@ -123,7 +123,8 @@ SDL_Surface * text[MAX_TEXT_NUMBER];
 SDL_Surface * text_x;
 SDL_Surface * text_y;
 SDL_Surface * text_r;
-SDL_Surface * text_xy;
+SDL_Surface *text_xy;
+TTF_Font* font;
 
 // Global transform data
 // A shape (dim, dim) is the projection onto the first 2 dimensions.
@@ -137,7 +138,7 @@ double *Ry_inv;
 int dim;
 
 // Global image stuff
-SDL_Surface *image_brush;
+SDL_Surface *image_erase;
 SDL_Surface *image_palette;
 SDL_Surface *image_rotation;
 
@@ -182,7 +183,7 @@ double rotation_speed = 1.0;
 // Mode flags
 int rotation_mode = 0;
 int rotation_mode_color[2] = {0xff0000, 0x00ff00}; 
-int brush_mode_on = 0;
+int erase_mode_on = 0;
 
 // Undo info
 int undo_length = 1;
@@ -321,7 +322,8 @@ void draw_slider(double log_ratio, double ratio, double grove_width,
 	    grove_y + dy + slider_y) = slider_color;
 }
 
-void blt_text(SDL_Surface * the_text, int x, int y, unsigned color)
+void blt_text(int screen_number, SDL_Surface * the_text, int x, int y,
+	      unsigned color)
 {
   for(int dx=0;dx<the_text->w;dx++)
     for(int dy=0;dy<the_text->h;dy++)
@@ -333,9 +335,9 @@ void blt_text(SDL_Surface * the_text, int x, int y, unsigned color)
 	  {
 	    int xx = x + dx;
 	    int yy = y + dy;
-	    if (xx>=0 && yy>=0 && xx < SCREEN_WIDTH[CONTROL_SCREEN]
-		&& yy < SCREEN_HEIGHT[CONTROL_SCREEN])
-	      point(CONTROL_SCREEN, xx, yy) = color;
+	    if (xx>=0 && yy>=0 && xx < SCREEN_WIDTH[screen_number]
+		&& yy < SCREEN_HEIGHT[screen_number])
+	      point(screen_number, xx, yy) = color;
 	  }
       }
 }
@@ -353,7 +355,7 @@ void draw_controls()
     {
       // Text
       int number = i % MAX_TEXT_NUMBER;
-      blt_text(text[number], CONTROL_NUMBER_XLOC,
+      blt_text(CONTROL_SCREEN, text[number], CONTROL_NUMBER_XLOC,
 	       CONTROL_NUMBER_YLOC + i*CONTROL_Y_STEP - control_scroll, 0xa0a0a0);
 
       // Circle displays
@@ -406,7 +408,7 @@ void draw_controls()
 	  int x = 27+CONTROL_NUMBER_X + CONTROL_Y_STEP*(bi+CONTROL_BOX_SHIFT);
 	  int y = i*CONTROL_Y_STEP + CONTROL_RADIUS - control_scroll - 13;
 	  if (bi == 3) x-=12;
-	  blt_text(box_text[bi], x, y, 0x900000);
+	  blt_text(CONTROL_SCREEN, box_text[bi], x, y, 0x900000);
 	}
     }
 
@@ -464,15 +466,18 @@ void draw_palette(int num_data, double (*data)[dim], int32_t * color)
 	  }
     }
 
-  for(int x = 0; x < 3 * BIT_X_SKIP; x++)
-    for(int y = 0; y < 5; y++)
-      {
-	point(BRUSH_SCREEN, BIT_X_SKIP*mask_location + x+10,  y + BIT_X_SKIP / 2)
-	  = BIT_SELECT_COLOR;
-	point(BRUSH_SCREEN, BIT_X_SKIP*mask_location + x+10,  y + 30 + BIT_X_SKIP)
-	  = BIT_SELECT_COLOR;
-      }
-
+  if (brush_color_mode == BRUSH_COLOR_MODE_DIRECT)
+    {
+      for(int x = 0; x < 3 * BIT_X_SKIP; x++)
+	for(int y = 0; y < 5; y++)
+	  {
+	    point(BRUSH_SCREEN, BIT_X_SKIP*mask_location + x+10,
+		  y + BIT_X_SKIP / 2) = BIT_SELECT_COLOR;
+	    point(BRUSH_SCREEN, BIT_X_SKIP*mask_location + x+10,
+		  y + 30 + BIT_X_SKIP) = BIT_SELECT_COLOR;
+	  }
+    }
+  
   if (brush_color_mode == BRUSH_COLOR_MODE_DIRECT)
     {
       for(int c=0; c < 8; c++)
@@ -517,11 +522,11 @@ void draw_palette(int num_data, double (*data)[dim], int32_t * color)
     }
   
   // Draw brush mode icon
-  blt(image_brush, BRUSH_SCREEN,
+  blt(image_erase, BRUSH_SCREEN,
       SCREEN_WIDTH[BRUSH_SCREEN] - BRUSH_MODE_MARGIN - BRUSH_MODE_BOX_SIZE,
       SCREEN_HEIGHT[BRUSH_SCREEN] - BRUSH_MODE_MARGIN - BRUSH_MODE_BOX_SIZE,
       BRUSH_MODE_BOX_SIZE, BRUSH_MODE_BOX_SIZE,
-      brush_mode_on ? 0x00ff00 : 0xff0000);
+      erase_mode_on ? 0x00ff00 : 0xff0000);
 
   // Draw color mode icon
   blt(image_palette, BRUSH_SCREEN,
@@ -529,6 +534,42 @@ void draw_palette(int num_data, double (*data)[dim], int32_t * color)
       SCREEN_HEIGHT[BRUSH_SCREEN] - BRUSH_MODE_MARGIN - BRUSH_MODE_BOX_SIZE,
       BRUSH_MODE_BOX_SIZE, BRUSH_MODE_BOX_SIZE,
       brush_color_mode ? COLOR_HASH(0,brush_color_mode) : 0xff0000);
+
+  // Text - numbering of boxes
+  if (brush_color_mode == BRUSH_COLOR_MODE_DIRECT)
+    {
+      for(int i = 0; i < 8;i++)
+	{
+	  int number = i % MAX_TEXT_NUMBER;	  
+	  blt_text(BRUSH_SCREEN, text[number],
+		   9 + BIT_X_SKIP/2 + i*PALETTE_BOX_SKIP , 40 + 130, 0xa0a0a0);
+	}
+    }
+  else 
+    {
+      int c0 = selected_color - 4;
+      if (c0 < 0) c0 = 0;
+
+      for(int i = 0; i < 8;i++)
+	{
+
+	  int number = (i + c0) % MAX_TEXT_NUMBER;	  
+	  blt_text(BRUSH_SCREEN, text[number],
+		   9 + BIT_X_SKIP/2 + i*PALETTE_BOX_SKIP , 40 + 130, 0xa0a0a0);
+	}
+    }
+
+
+  // Text - selected color
+  char the_text[MAX_STRING];
+  SDL_Color white = {255, 255, 255};
+  SDL_Surface * text_surface;
+  sprintf(the_text, "%x", selected_color);
+  text_surface = TTF_RenderText_Solid(font, the_text, white);
+  blt_text(BRUSH_SCREEN, text_surface,
+	   SCREEN_WIDTH[BRUSH_SCREEN] - 2 * BRUSH_MODE_MARGIN -
+	   2 *BRUSH_MODE_BOX_SIZE, 40 + 130, 0xa0a0a0);
+  SDL_FreeSurface(text_surface);  
 }
 
 void xy_tally(int *xy_dim, int *xy_cnt)
@@ -759,7 +800,7 @@ void new_rotation_direction(unsigned seed)
 
 void change_rotation_mode()
 {
-  brush_mode_on = 0;
+  erase_mode_on = 0;
   rotation_mode = !rotation_mode;
   new_rotation_direction(RANDOM_SEED);
   if (rotation_mode)
@@ -794,12 +835,11 @@ void move_sliders(int x, int y)
 void create_text()
 {
   char the_text[MAX_STRING];
-  TTF_Font* font = TTF_OpenFont(TTF_FILE, 24);
   SDL_Color white = {255, 255, 255};
   
   for(int i = 0; i < MAX_TEXT_NUMBER; i++)
     {
-      sprintf(the_text, "%d", i);
+      sprintf(the_text, "%x", i);
       text[i] = TTF_RenderText_Solid(font, the_text, white);
     }
 
@@ -918,11 +958,13 @@ void clear_all()
   brush_xsize = DEFAULT_BRUSH_XSIZE;
   brush_ysize = DEFAULT_BRUSH_YSIZE;
   rotation_direction_exists = 0;
-  brush_mode_on = 0;
+  erase_mode_on = 0;
   brush_color_mode = 0;
 }
 
-void undo_save(int num_data, int32_t undo[UNDO_SIZE][num_data], int32_t * color)
+void undo_save(int num_data, int32_t undo[UNDO_SIZE][num_data],
+	       int32_t undo_hide[UNDO_SIZE][num_data],
+	       int32_t * color, int32_t * hide)
 {
   if (undo_length < UNDO_SIZE)
     {
@@ -932,7 +974,8 @@ void undo_save(int num_data, int32_t undo[UNDO_SIZE][num_data], int32_t * color)
 	{
 	  for(int i = 0; i < num_data; i++)
 	    {
-	      if (color[i] != undo[undo_length - 1][i])
+	      if (color[i] != undo[undo_length - 1][i] ||
+		  hide[i] != undo_hide[undo_length - 1][i])
 		{
 		  save_undo = 1;
 		  break;
@@ -941,7 +984,11 @@ void undo_save(int num_data, int32_t undo[UNDO_SIZE][num_data], int32_t * color)
 	}
       if (save_undo)
 	{
-	  for(int i=0;i<num_data;i++) undo[undo_length][i] = color[i];
+	  for(int i=0;i<num_data;i++)
+	    {
+	      undo[undo_length][i] = color[i];
+	      undo_hide[undo_length][i] = hide[i];
+	    }
 	  undo_length++;
 	  max_undo_length = undo_length;
 	}
@@ -969,13 +1016,14 @@ void color_picker(int * mouse_x, int * mouse_y, double (*data)[dim],
     selected_color = (best_color >> mask_location) & 7;
   else
     selected_color = best_color;
+  printf("Brush color = %x\n", selected_color);
 }
 
 void service_mouse_motion_on_point(int mouse_x, int mouse_y, int mouse_state,
 				   double (*data)[dim], int * color, int * hide,
 				   int num_data)
 {
-  if (brush_mode_on || (mouse_state & SDL_BUTTON_LMASK))
+  if (mouse_state & SDL_BUTTON_LMASK)
     {
       if (SDL_GetModState() & KMOD_CTRL)
 	{
@@ -1033,7 +1081,9 @@ void service_mouse_motion_on_point(int mouse_x, int mouse_y, int mouse_state,
 		    ? brush_y : brush_y + brush_ysize;
 		  if (x >= x1 && x < x2 && y >= y1 && y < y2)
 		    {
-		      if (brush_color_mode == BRUSH_COLOR_MODE_DIRECT)
+		      if (erase_mode_on)
+			hide[k] = 1;
+		      else if (brush_color_mode == BRUSH_COLOR_MODE_DIRECT)
 			color[k] = (color[k] &
 				    ((7 << mask_location) ^ 0xffffffff))
 			  ^ (selected_color << mask_location);
@@ -1102,7 +1152,7 @@ void service_left_button_on_brush(int button_x, int button_y)
 	   - BRUSH_MODE_MARGIN)
     {
       rotation_mode = 0;
-      brush_mode_on = !brush_mode_on;
+      erase_mode_on = !erase_mode_on;
     }
   else if (button_x >= SCREEN_WIDTH[BRUSH_SCREEN]
 	   - 2* BRUSH_MODE_MARGIN - 2 * BRUSH_MODE_BOX_SIZE &&
@@ -1167,9 +1217,9 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
       exit(1);
     }
   for(int i=0;i<num_data;i++) hide[i] = 0;
-
   
   TTF_Init();
+  font = TTF_OpenFont(TTF_FILE, 24);
   create_text();
   
   for(int i = 0; i < 100; i++) lrand48();
@@ -1179,9 +1229,23 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
   if (dim <= 1) return;
   double (*data)[dim] = (double (*)[dim]) data_flat;
 
-  int32_t undo[UNDO_SIZE][num_data];
+  int32_t * undo_flat;
+  if ((undo_flat = malloc(sizeof(int32_t) * num_data * UNDO_SIZE)) == 0)
+    {
+      fprintf(stderr, "Out of memory\n");
+      exit(1);
+    }
+  int32_t * undo_hide_flat;
+  if ((undo_hide_flat = malloc(sizeof(int32_t) * num_data * UNDO_SIZE)) == 0)
+    {
+      fprintf(stderr, "Out of memory\n");
+      exit(1);
+    }
+  int32_t (*undo)[num_data] = (int32_t (*)[num_data]) undo_flat;
+  int32_t (*undo_hide)[num_data] = (int32_t (*)[num_data]) undo_hide_flat;
   for(int i=0;i<num_data;i++) undo[0][i] = color[i];
-
+  for(int i=0;i<num_data;i++) undo_hide[0][i] = 0;//hide[i];
+  
   // Set up initial transform (A) \in SO(dim)
   if ((A = malloc(SQR(dim) * sizeof(double))) == NULL)
     {fprintf(stderr, "Out of memory\n");exit(1);}  
@@ -1223,7 +1287,7 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 	      SCREEN_YPOS[BRUSH_SCREEN]);
   SDL_SetRenderDrawColor(renderer[POINT_SCREEN],0,0,0,255);
 
-  image_brush = SDL_LoadBMP(IMAGE_BRUSH_FILE);
+  image_erase = SDL_LoadBMP(IMAGE_ERASE_FILE);
   image_palette = SDL_LoadBMP(IMAGE_PALETTE_FILE);
   image_rotation = SDL_LoadBMP(IMAGE_ROTATION_FILE);
 
@@ -1334,9 +1398,9 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		  new_rotation_direction(RANDOM_SEED);
 		  refresh_flag = 1;
 		  break;
-		case SDLK_b:
+		case SDLK_e:
 		  rotation_mode = 0;
-		  brush_mode_on = !brush_mode_on;
+		  erase_mode_on = !erase_mode_on;
 		  refresh_flag = 1;
 		  break;
 		case SDLK_n:
@@ -1355,7 +1419,7 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		  SDL_GetMouseState(&mouse_x, &mouse_y);
 		  if (event.window.windowID ==
 		      SDL_GetWindowID(screen[POINT_SCREEN]))
-		    {
+		    {		      
 		      color_picker(&mouse_x, &mouse_y, data, color, num_data);
 		      refresh_flag = 1;
 		    }
@@ -1371,18 +1435,50 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		  if (control_scroll < 0) control_scroll = 0;
 		  refresh_flag = 1;
 		  break;
+ 		case SDLK_LEFT:
+		  selected_color--;
+		  if (brush_color_mode == BRUSH_COLOR_MODE_DIRECT)
+		    {
+		      if (selected_color < 0) selected_color = 7;
+		    }
+		  else
+		    {
+		      if (selected_color < 0) selected_color = 0xfffff;
+		    }
+		  refresh_flag = 1;
+		  break;		  
+ 		case SDLK_RIGHT:
+		  selected_color++;
+		  if (brush_color_mode == BRUSH_COLOR_MODE_DIRECT)
+		    {
+		      if (selected_color >= 8) selected_color = 0;
+		    }
+		  else
+		    {
+		      if (selected_color >= 0x100000) selected_color = 0;
+		    }
+		  refresh_flag = 1;
+		  break;
 		case SDLK_z:
 		  if (undo_length > 1)
 		    {
 		      undo_length--;
-		      for(int i=0;i<num_data;i++) color[i] = undo[undo_length-1][i];
+		      for(int i=0;i<num_data;i++)
+			{
+			  color[i] = undo[undo_length-1][i];
+			  hide[i] = undo_hide[undo_length-1][i];
+			}
 		      refresh_flag = 1;
 		    }
 		  break;
 		case SDLK_y:
 		  if (undo_length < UNDO_SIZE && undo_length < max_undo_length)
 		    {
-		      for(int i=0;i<num_data;i++) color[i] = undo[undo_length][i];
+		      for(int i=0;i<num_data;i++)
+			{
+			  color[i] = undo[undo_length][i];
+			  hide[i] = undo_hide[undo_length][i];
+			}
 		      undo_length++;
 		      refresh_flag = 1;
 		    }
@@ -1462,7 +1558,7 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		}
 	      break;
 	    case SDL_MOUSEBUTTONUP:
-	      undo_save(num_data, undo, color);
+	      undo_save(num_data, undo, undo_hide, color, hide);
 	      break;
 	    }
 	}
