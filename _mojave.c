@@ -23,8 +23,9 @@
 #define IMAGE_PALETTE_FILE "/home/kevin/big-yellow-duck/mojave_palette.bmp"
 #define IMAGE_ROTATION_FILE "/home/kevin/big-yellow-duck/mojave_rotation.bmp"
 
-#define TTF_FILE "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-    
+#define TTF_FILE_FILES {"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf"}
+#define FONT_NUM_LOCATIONS 2
+
 #define POINT_SCREEN 0
 #define CONTROL_SCREEN 1
 #define BRUSH_SCREEN 2
@@ -99,15 +100,20 @@
 #define UNDO_SIZE 1024
 #define MAX_TEXT_NUMBER 256
 #define GRID_COLOR 0x808080
+#define DEFAULT_POINT_SIZE 5
+#define MAX_POINT_SIZE 10
 
 #define SQR(x) ((x)*(x))
 #define LCG(x) ((134775813 * (x) + 2531011) & 0xffffff)
 #define COLOR_HASH(x,t) LCG(LCG(x) ^ LCG(LCG((t) + 12345))  )
 #define RANDOM(n) ((int)(drand48() * (n)))
 
+#define ERROR(x) {fprintf(stderr,(x));fprintf(stderr,"\n");exit(1);}
 #define point(i, x, y) pnt[i][(int)(x) + (int)(y)*SCREEN_WIDTH[i]]
 #define AA(i, j) ((i)*dim + (j))
 #define RR(k, i, j) ((k) * dim * dim + (i) * dim + (j))
+#define MIN(x,y) ((x)<(y)) ? (x) : (y)
+#define MAX(x,y) ((x)<(y)) ? (y) : (x)
 
 // SDL window stuff
 SDL_Window *screen[SCREENS];
@@ -125,6 +131,9 @@ SDL_Surface * text_y;
 SDL_Surface * text_r;
 SDL_Surface *text_xy;
 TTF_Font* font;
+char ttf_file[FONT_NUM_LOCATIONS][MAX_STRING] = TTF_FILE_FILES;
+
+// point_texture[MAX_POINT_SIZE] @@@@@@
 
 // Global transform data
 // A shape (dim, dim) is the projection onto the first 2 dimensions.
@@ -144,6 +153,9 @@ SDL_Surface *image_rotation;
 
 // box is shape (dim, num-boxes)
 int (*box)[CONTROL_NUM_BOX];
+
+// point_size radius
+double point_size = DEFAULT_POINT_SIZE;
 
 // Pallete = (x >> mask_location) & 7
 int mask_location = 0;
@@ -215,6 +227,10 @@ void screen_init(int i, int init, char * name, int xpos, int ypos)
 				   SDL_WINDOW_RESIZABLE);
       screen_surface[i] = SDL_GetWindowSurface(screen[i]);
       renderer[i] = SDL_CreateRenderer(screen[i], -1, 0);
+
+      SDL_RendererInfo info;
+      SDL_GetRendererInfo(renderer[i], &info);
+      printf("Renderer Name: %s\n", info.name);
     }
   SDL_RenderClear(renderer[i]);
   SDL_GL_SwapWindow(screen[i]);
@@ -566,6 +582,7 @@ void draw_palette(int num_data, double (*data)[dim], int32_t * color)
   SDL_Surface * text_surface;
   sprintf(the_text, "%x", selected_color);
   text_surface = TTF_RenderText_Solid(font, the_text, white);
+  if (text_surface == NULL) ERROR("TTF_RenderText_Solid failure");
   blt_text(BRUSH_SCREEN, text_surface,
 	   SCREEN_WIDTH[BRUSH_SCREEN] - 2 * BRUSH_MODE_MARGIN -
 	   2 *BRUSH_MODE_BOX_SIZE, 40 + 130, 0xa0a0a0);
@@ -841,19 +858,24 @@ void create_text()
     {
       sprintf(the_text, "%x", i);
       text[i] = TTF_RenderText_Solid(font, the_text, white);
+      if (text[i] == NULL) ERROR("TTF_RenderText_Solid failure");	
     }
 
   sprintf(the_text, "x");
   text_x = TTF_RenderText_Solid(font, the_text, white);
+  if (text_x == NULL) ERROR("TTF_RenderText_Solid failure");
 
   sprintf(the_text, "y");
   text_y = TTF_RenderText_Solid(font, the_text, white);
+  if (text_y == NULL) ERROR("TTF_RenderText_Solid failure");
 
   sprintf(the_text, "r");
   text_r = TTF_RenderText_Solid(font, the_text, white);
-
+  if (text_r == NULL) ERROR("TTF_RenderText_Solid failure");
+  
   sprintf(the_text, "x/y");
   text_xy = TTF_RenderText_Solid(font, the_text, white);
+  if (text_xy == NULL) ERROR("TTF_RenderText_Solid failure");
 }
 
 void service_box_0_1(int i, int bi)
@@ -1019,81 +1041,87 @@ void color_picker(int * mouse_x, int * mouse_y, double (*data)[dim],
   printf("Brush color = %x\n", selected_color);
 }
 
+void service_left_button_on_point(int mouse_x, int mouse_y, double (*data)[dim],
+				 int * color, int * hide, int num_data)
+{
+  if (SDL_GetModState() & KMOD_CTRL)
+    {
+      if (brush_x < 0 || brush_y < 0)
+	{
+	  brush_x = mouse_x;
+	  brush_y = mouse_y;
+	  brush_xsize = DEFAULT_BRUSH_XSIZE;
+	  brush_ysize = DEFAULT_BRUSH_YSIZE;
+	}
+      else
+	{
+	  brush_xsize = mouse_x - brush_x;
+	  brush_ysize = mouse_y - brush_y;
+	}
+    }
+  else
+    {
+      int xy_dim[dim];
+      int xy_cnt = 0;
+      xy_tally(xy_dim, &xy_cnt);
+      brush_x = mouse_x - brush_xsize;
+      brush_y = mouse_y - brush_ysize;
+      for(int k=0;k<num_data;k++)
+	{
+	  if (hide[k]) continue;
+	  double out_points[dim*dim][2];
+	  int num_out_points = 0;
+	  if (xy_cnt)
+	    {
+	      for(int i=0;i<xy_cnt;i++)
+		for(int j=0;j<xy_cnt;j++)
+		  {
+		    xy_transform(data[k], &out_points[num_out_points][0],
+				 &out_points[num_out_points][1], i, j, xy_dim,
+				 xy_cnt);			
+		    num_out_points++;		       
+		  }
+	    }
+	  else
+	    {
+	      transform(data[k], &out_points[0][0], &out_points[0][1]);
+	      num_out_points++;
+	    }
+	  
+	  for(int l=0;l<num_out_points;l++)
+	    {
+	      double x = out_points[l][0];
+	      double y = out_points[l][1];
+	      int x1 = (brush_xsize >= 0)
+		? brush_x : brush_x + brush_xsize;
+	      int x2 = (brush_xsize < 0)
+		? brush_x : brush_x + brush_xsize;
+	      int y1 = (brush_ysize >= 0)
+		? brush_y : brush_y + brush_ysize;
+	      int y2 = (brush_ysize < 0)
+		? brush_y : brush_y + brush_ysize;
+	      if (x >= x1 && x < x2 && y >= y1 && y < y2)
+		{
+		  if (erase_mode_on)
+		    hide[k] = 1;
+		  else if (brush_color_mode == BRUSH_COLOR_MODE_DIRECT)
+		    color[k] = (color[k] &
+				((7 << mask_location) ^ 0xffffffff))
+		      ^ (selected_color << mask_location);
+		  else
+		    color[k] = selected_color;
+		}
+	    }
+	}
+    }
+}
+
 void service_mouse_motion_on_point(int mouse_x, int mouse_y, int mouse_state,
 				   double (*data)[dim], int * color, int * hide,
 				   int num_data)
 {
   if (mouse_state & SDL_BUTTON_LMASK)
-    {
-      if (SDL_GetModState() & KMOD_CTRL)
-	{
-	  if (brush_x < 0 || brush_y < 0)
-	    {
-	      brush_xsize = DEFAULT_BRUSH_XSIZE;
-	      brush_ysize = DEFAULT_BRUSH_YSIZE;
-	    }
-	  else
-	    {
-	      brush_xsize = mouse_x - brush_x;
-	      brush_ysize = mouse_y - brush_y;
-	    }
-	}
-      else
-	{
-	  int xy_dim[dim];
-	  int xy_cnt = 0;
-	  xy_tally(xy_dim, &xy_cnt);
-	  brush_x = mouse_x - brush_xsize;
-	  brush_y = mouse_y - brush_ysize;
-	  for(int k=0;k<num_data;k++)
-	    {
-	      if (hide[k]) continue;
-	      double out_points[dim*dim][2];
-	      int num_out_points = 0;
-	      if (xy_cnt)
-		{
-		  for(int i=0;i<xy_cnt;i++)
-		    for(int j=0;j<xy_cnt;j++)
-		      {
- 			xy_transform(data[k], &out_points[num_out_points][0],
-				     &out_points[num_out_points][1], i, j, xy_dim,
-				     xy_cnt);			
-			num_out_points++;		       
-		      }
-		}
-	      else
-		{
-		  transform(data[k], &out_points[0][0], &out_points[0][1]);
-		  num_out_points++;
-		}
-	      
-	      for(int l=0;l<num_out_points;l++)
-		{
-		  double x = out_points[l][0];
-		  double y = out_points[l][1];
-		  int x1 = (brush_xsize >= 0)
-		    ? brush_x : brush_x + brush_xsize;
-		  int x2 = (brush_xsize < 0)
-		    ? brush_x : brush_x + brush_xsize;
-		  int y1 = (brush_ysize >= 0)
-		    ? brush_y : brush_y + brush_ysize;
-		  int y2 = (brush_ysize < 0)
-		    ? brush_y : brush_y + brush_ysize;
-		  if (x >= x1 && x < x2 && y >= y1 && y < y2)
-		    {
-		      if (erase_mode_on)
-			hide[k] = 1;
-		      else if (brush_color_mode == BRUSH_COLOR_MODE_DIRECT)
-			color[k] = (color[k] &
-				    ((7 << mask_location) ^ 0xffffffff))
-			  ^ (selected_color << mask_location);
-		      else
-			color[k] = selected_color;
-		    }
-		}
-	    }
-	}
-    }
+    service_left_button_on_point(mouse_x, mouse_y, data, color, hide, num_data);
   if (mouse_state & SDL_BUTTON_RMASK)
     {
       brush_x = OFFSCREEN;
@@ -1208,7 +1236,7 @@ void service_left_button_on_control(int button_x, int button_y)
 // data must be normalized to be in [-1,1]
 // color will be modified in place
 void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
-	    char * name)
+	    char * name, char * mojave_path)
 {
   int32_t * hide;
   if ((hide = malloc(sizeof(int32_t) * num_data)) == 0)
@@ -1217,9 +1245,19 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
       exit(1);
     }
   for(int i=0;i<num_data;i++) hide[i] = 0;
-  
-  TTF_Init();
-  font = TTF_OpenFont(TTF_FILE, 24);
+
+  if (TTF_Init()) {fprintf(stderr, "TTF_Init error!");exit(1);}
+  int font_found = 0;
+  for(int i=0;i<FONT_NUM_LOCATIONS;i++)
+    {
+      font = TTF_OpenFont(ttf_file[i], 24);
+      if (font != NULL)
+	{
+	  font_found = 1;
+	  break;
+	}
+    }
+  if (!font_found) ERROR("TTF_OpenFont error");
   create_text();
   
   for(int i = 0; i < 100; i++) lrand48();
@@ -1281,15 +1319,25 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 
   screen_init(POINT_SCREEN, 1, name, SCREEN_XPOS[POINT_SCREEN],
 	      SCREEN_YPOS[POINT_SCREEN]);
+  SCREEN_HEIGHT[CONTROL_SCREEN] = MIN(MAX(CONTROL_Y_STEP * dim,
+					  ZOOM_GROVE_Y + ZOOM_GROVE_HEIGHT + 20),
+				      SCREEN_HEIGHT[CONTROL_SCREEN]);
   screen_init(CONTROL_SCREEN, 1, "Controls", SCREEN_XPOS[CONTROL_SCREEN],
-	      SCREEN_YPOS[CONTROL_SCREEN]);
+	      SCREEN_YPOS[CONTROL_SCREEN]);    
   screen_init(BRUSH_SCREEN, 1, "Brush", SCREEN_XPOS[BRUSH_SCREEN],
 	      SCREEN_YPOS[BRUSH_SCREEN]);
   SDL_SetRenderDrawColor(renderer[POINT_SCREEN],0,0,0,255);
 
-  image_erase = SDL_LoadBMP(IMAGE_ERASE_FILE);
-  image_palette = SDL_LoadBMP(IMAGE_PALETTE_FILE);
-  image_rotation = SDL_LoadBMP(IMAGE_ROTATION_FILE);
+  char image_file[MAX_STRING];
+  sprintf(image_file, "%s/%s", mojave_path, IMAGE_ERASE_FILE);
+  if ((image_erase = SDL_LoadBMP(image_file))==NULL)
+    ERROR("SDL_LoadBMP error (erase)");
+  sprintf(image_file, "%s/%s", mojave_path, IMAGE_PALETTE_FILE);
+  if ((image_palette = SDL_LoadBMP(image_file))==NULL)
+    ERROR("SDL_LoadBMP (palette)");
+  sprintf(image_file, "%s/%s", mojave_path, IMAGE_ROTATION_FILE);
+  if ((image_rotation = SDL_LoadBMP(image_file))==NULL)
+    ERROR("SDL_LoadBMP (rotation)");
 
   SDL_Event event, dummy;
   int flag = 1;
@@ -1548,10 +1596,18 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 						     event.button.y);
 		      refresh_flag = 1;
 		    }
-		  if (event.window.windowID ==
-		      SDL_GetWindowID(screen[BRUSH_SCREEN]))
+		  else if (event.window.windowID ==
+			   SDL_GetWindowID(screen[BRUSH_SCREEN]))
 		    {
 		      service_left_button_on_brush(event.button.x, event.button.y);
+		      refresh_flag = 1;
+		    }
+		  else if (event.window.windowID ==
+			   SDL_GetWindowID(screen[POINT_SCREEN]))
+		    {
+		      printf("MEOW\n");
+		      service_left_button_on_point(mouse_x, mouse_y,
+						  data, color, hide, num_data);
 		      refresh_flag = 1;
 		    }
 		  break;
@@ -1559,6 +1615,14 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 	      break;
 	    case SDL_MOUSEBUTTONUP:
 	      undo_save(num_data, undo, undo_hide, color, hide);
+	      break;
+	    case SDL_MOUSEWHEEL:
+	      printf("MEOW %d %d\n", event.wheel.x, event.wheel.y);
+	      if (event.wheel.y > 0)
+		zoom_ratio /= POINT_ZOOM_MULT;		  
+	      else if (event.wheel.y < 0)
+		zoom_ratio *= POINT_ZOOM_MULT;		  
+	      refresh_flag = 1;
 	      break;
 	    }
 	}
