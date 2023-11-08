@@ -19,9 +19,12 @@
 #define FPS 60
 #define FRAME_DELAY (1000 / FPS)
 
-#define IMAGE_ERASE_FILE "/home/kevin/big-yellow-duck/mojave_erase.bmp"
-#define IMAGE_PALETTE_FILE "/home/kevin/big-yellow-duck/mojave_palette.bmp"
-#define IMAGE_ROTATION_FILE "/home/kevin/big-yellow-duck/mojave_rotation.bmp"
+#define IMAGE_ERASE_FILE "mojave_erase.bmp"
+#define IMAGE_PALETTE_FILE "mojave_palette.bmp"
+#define IMAGE_ROTATION_FILE "mojave_rotation.bmp"
+#define IMAGE_SLIDER_SPEED_FILE "mojave_speed.bmp"
+#define IMAGE_SLIDER_ZOOM_FILE "mojave_zoom.bmp"
+#define IMAGE_SLIDER_POINT_FILE "mojave_point.bmp"
 
 #define TTF_FILE_FILES {"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf"}
 #define FONT_NUM_LOCATIONS 2
@@ -30,7 +33,7 @@
 #define CONTROL_SCREEN 1
 #define BRUSH_SCREEN 2
 #define SCREENS 3
-#define SCREEN_WIDTHS {800,600,800}
+#define SCREEN_WIDTHS {800,620,800}
 #define SCREEN_HEIGHTS {800,1000,200}
 #define SCREEN_XPOSES {0,850,0}
 #define SCREEN_YPOSES {0,0,900}
@@ -65,8 +68,11 @@
 #define ZOOM_SLIDER_COLOR 0xffffff
 #define ZOOM_LOG_RATIO 18.0
 #define SPEED_GROVE_X 440
+#define POINTSIZE_GROVE_X 520
 #define RANDOM_SEED (lrand48())
 #define CONTROL_SCROLL_DELTA 20
+#define POINTSIZE_LOG_RATIO 80.0
+#define POINTSIZE_DIV 4.0
 
 #define BRUSH_BG 0x404040
 #define BIT_RADIUS 8
@@ -100,8 +106,10 @@
 #define UNDO_SIZE 1024
 #define MAX_TEXT_NUMBER 256
 #define GRID_COLOR 0x808080
-#define DEFAULT_POINT_SIZE 5
-#define MAX_POINT_SIZE 10
+#define DEFAULT_POINT_SIZE 3
+#define MIN_POINT_SIZE 1
+#define MAX_POINT_SIZE 16
+#define POINT_SIZE_STEP 0.75
 
 #define SQR(x) ((x)*(x))
 #define LCG(x) ((134775813 * (x) + 2531011) & 0xffffff)
@@ -133,8 +141,6 @@ SDL_Surface *text_xy;
 TTF_Font* font;
 char ttf_file[FONT_NUM_LOCATIONS][MAX_STRING] = TTF_FILE_FILES;
 
-// point_texture[MAX_POINT_SIZE] @@@@@@
-
 // Global transform data
 // A shape (dim, dim) is the projection onto the first 2 dimensions.
 // R is such that R[k] = R^(2^k)
@@ -150,12 +156,17 @@ int dim;
 SDL_Surface *image_erase;
 SDL_Surface *image_palette;
 SDL_Surface *image_rotation;
+SDL_Surface *image_slider_speed;
+SDL_Surface *image_slider_zoom;
+SDL_Surface *image_slider_point;
 
 // box is shape (dim, num-boxes)
 int (*box)[CONTROL_NUM_BOX];
 
-// point_size radius
+// point rendering
 double point_size = DEFAULT_POINT_SIZE;
+SDL_Surface * point_surface = NULL;
+SDL_Texture * point_texture = NULL;
 
 // Pallete = (x >> mask_location) & 7
 int mask_location = 0;
@@ -219,18 +230,14 @@ void screen_init(int i, int init, char * name, int xpos, int ypos)
 {
   if (init)
     {
-      SDL_Init(SDL_INIT_VIDEO);
-      atexit(SDL_Quit);
-      
       screen[i] = SDL_CreateWindow(name, xpos, ypos,
 				   SCREEN_WIDTH[i], SCREEN_HEIGHT[i],
 				   SDL_WINDOW_RESIZABLE);
-      screen_surface[i] = SDL_GetWindowSurface(screen[i]);
-      renderer[i] = SDL_CreateRenderer(screen[i], -1, 0);
+      //      screen_surface[i] = SDL_GetWindowSurface(screen[i]);
+      renderer[i] = SDL_CreateRenderer(screen[i], -1, SDL_RENDERER_ACCELERATED);
 
       SDL_RendererInfo info;
       SDL_GetRendererInfo(renderer[i], &info);
-      printf("Renderer Name: %s\n", info.name);
     }
   SDL_RenderClear(renderer[i]);
   SDL_GL_SwapWindow(screen[i]);
@@ -238,12 +245,11 @@ void screen_init(int i, int init, char * name, int xpos, int ypos)
 			      SDL_TEXTUREACCESS_STREAMING,
 			      SCREEN_WIDTH[i], SCREEN_HEIGHT[i]);
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,
-	      "linear");  // make the scaled rendering look smoother.
+  	      "linear");  // make the scaled rendering look smoother.
   SDL_RenderSetLogicalSize(renderer[i], SCREEN_WIDTH[i], SCREEN_HEIGHT[i]);
 
   if (pnt[i]) free(pnt[i]);
-  if ((pnt[i] = malloc(SCREEN_WIDTH[i] * SCREEN_HEIGHT[i] * sizeof(unsigned))) == 0)
-    {fprintf(stderr, "OUT OF MEMORY");exit(1);}
+  if ((pnt[i] = malloc(SCREEN_WIDTH[i] * SCREEN_HEIGHT[i] * sizeof(unsigned))) == 0) ERROR("OUT OF MEMORY");
 }
 
 void blt(SDL_Surface * surface, int screen_index, int x, int y,
@@ -442,6 +448,26 @@ void draw_controls()
   draw_slider(ZOOM_LOG_RATIO, rotation_speed, ZOOM_GROVE_WIDTH, ZOOM_GROVE_HEIGHT,
 	      SPEED_GROVE_X, ZOOM_GROVE_Y, ZOOM_SLIDER_WIDTH, ZOOM_SLIDER_HEIGHT,
 	      ZOOM_GROVE_COLOR, ZOOM_SLIDER_COLOR);
+  draw_slider(POINTSIZE_LOG_RATIO, point_size/POINTSIZE_DIV, ZOOM_GROVE_WIDTH,
+	      ZOOM_GROVE_HEIGHT, POINTSIZE_GROVE_X, ZOOM_GROVE_Y, ZOOM_SLIDER_WIDTH,
+	      ZOOM_SLIDER_HEIGHT, ZOOM_GROVE_COLOR, ZOOM_SLIDER_COLOR);
+
+  // Slider indicators
+  blt(image_slider_speed, CONTROL_SCREEN,
+      SCREEN_WIDTH[CONTROL_SCREEN] - ROTATION_MODE_MARGIN_X - 81,
+      ROTATION_MODE_MARGIN_Y + 55,
+      ROTATION_MODE_BOX_SIZE/1.7, ROTATION_MODE_BOX_SIZE/1.7,
+      0xa0a0ff);
+  blt(image_slider_zoom, CONTROL_SCREEN,
+      SCREEN_WIDTH[CONTROL_SCREEN] - ROTATION_MODE_MARGIN_X - 81 + 40,
+      ROTATION_MODE_MARGIN_Y + 55,
+      ROTATION_MODE_BOX_SIZE/1.7, ROTATION_MODE_BOX_SIZE/1.7,
+      0xa0a0ff);
+  blt(image_slider_point, CONTROL_SCREEN,
+      SCREEN_WIDTH[CONTROL_SCREEN] - ROTATION_MODE_MARGIN_X - 81 + 80,
+      ROTATION_MODE_MARGIN_Y + 55,
+      ROTATION_MODE_BOX_SIZE/1.7, ROTATION_MODE_BOX_SIZE/1.7,
+      0xa0a0ff);
 }
 
 // Draws the brush window
@@ -597,6 +623,14 @@ void xy_tally(int *xy_dim, int *xy_cnt)
     }
 }
 
+void draw_point(int x, int y, unsigned c)
+{
+  SDL_Rect dst_rect = {x - point_size, y - point_size,
+		       point_surface->w, point_surface->h};
+  SDL_SetTextureColorMod(point_texture, (c>>16) & 0xff, (c>>8) & 0xff, c & 0xff);
+  SDL_RenderCopy(renderer[POINT_SCREEN], point_texture, NULL, &dst_rect);
+}
+
 // Draws the main view - points window
 void draw_points(int num_data, double (*data)[dim], int32_t * color, int32_t * hide)
 {
@@ -617,7 +651,7 @@ void draw_points(int num_data, double (*data)[dim], int32_t * color, int32_t * h
 		if (hide[k]) continue;
 		double x,y;
 		xy_transform(data[k], &x, &y, i, j, xy_dim, xy_cnt);
-		point(POINT_SCREEN, x, y) = get_color(color[k]);
+		draw_point(x,y,get_color(color[k]));
 	      }
 	    // Draw grid
 	    for(int x=0;x<SCREEN_WIDTH[POINT_SCREEN];x++)
@@ -626,7 +660,7 @@ void draw_points(int num_data, double (*data)[dim], int32_t * color, int32_t * h
 	    for(int y=0;y<SCREEN_HEIGHT[POINT_SCREEN];y++)
 	      point(POINT_SCREEN, i * SCREEN_WIDTH[POINT_SCREEN] / xy_cnt, y)
 		= GRID_COLOR;	
-	  }      
+	  }
     }
   else
     {
@@ -636,43 +670,28 @@ void draw_points(int num_data, double (*data)[dim], int32_t * color, int32_t * h
    	  if (hide[i]) continue;
 	  double x,y;
 	  transform(data[i], &x, &y);
-	  point(POINT_SCREEN,x,y) = get_color(color[i]);
+	  draw_point(x,y,get_color(color[i]));
 	}
     }
 
   if (brush_xsize == 0 || brush_ysize == 0) return;
   
-  // Draw horizontal lines of brush
+  // Draw brush rectangle
   unsigned brush_cursor_color = (brush_color_mode == BRUSH_COLOR_MODE_DIRECT) ?
     brush_color[selected_color] : COLOR_HASH(selected_color, brush_color_mode);
-  int xstep = (brush_xsize >= 0) ? 1 : -1;
-  for(int dx = 0; dx != brush_xsize; dx+=xstep)
+  if (brush_x >= 0 && brush_y >= 0)
     {
-      int x = brush_x + dx;
-      int y = brush_y;
-      if (x>=0 && y>=0 && x <= SCREEN_WIDTH[POINT_SCREEN] &&
-	  y <= SCREEN_HEIGHT[POINT_SCREEN])
-	point(POINT_SCREEN, x, y) = brush_cursor_color;
-      y = brush_y + brush_ysize;
-      if (x>=0 && y>=0 && x <= SCREEN_WIDTH[POINT_SCREEN] &&
-	  y <= SCREEN_HEIGHT[POINT_SCREEN])
-	point(POINT_SCREEN, x, y) = brush_cursor_color;
-    }
+      SDL_Rect rect = {brush_x, brush_y, brush_xsize, brush_ysize};
+      SDL_SetRenderDrawColor(renderer[POINT_SCREEN],
+			     (brush_cursor_color >> 16) & 0xff,
+			     (brush_cursor_color >> 8) & 0xff,
+			     (brush_cursor_color >> 0) & 0xff,
+			     255);
+      SDL_RenderDrawRect(renderer[POINT_SCREEN], &rect);
+      SDL_SetRenderDrawColor(renderer[POINT_SCREEN], 0,0,0,255);         
+  }
 
-  // Draw vertical lines of brush
-  int ystep = (brush_ysize >= 0) ? 1 : -1;
-  for(int dy = 0; dy != brush_ysize; dy+=ystep)
-    {
-      int y = brush_y + dy;
-      int x = brush_x;
-      if (x>=0 && y>=0 && x <= SCREEN_WIDTH[POINT_SCREEN] &&
-	  y <= SCREEN_HEIGHT[POINT_SCREEN])
-	point(POINT_SCREEN, x, y) = brush_cursor_color;
-      x = brush_x + brush_xsize;
-      if (x>=0 && y>=0 && x <= SCREEN_WIDTH[POINT_SCREEN] &&
-	  y <= SCREEN_HEIGHT[POINT_SCREEN])
-	point(POINT_SCREEN, x, y) = brush_cursor_color;
-    }
+  SDL_RenderPresent(renderer[POINT_SCREEN]);
 }
 
 // Sets out to the identity
@@ -837,16 +856,49 @@ void change_rotation_mode()
     }
 }
 
+void create_point_texture()
+{
+  int surface_dim = 2 * point_size + 1;
+  if (point_surface) SDL_FreeSurface(point_surface);
+  if (point_texture) SDL_DestroyTexture(point_texture);
+  point_surface = SDL_CreateRGBSurface(0,surface_dim,surface_dim,32,0,0,0,0);
+  for(int dy=-point_size;dy<=point_size;dy++)
+    for(int dx=-point_size;dx<=point_size;dx++)
+      {
+	unsigned color = (SQR(dx) + SQR(dy) <= SQR(point_size) - 0.1) ?
+	  0xffffffff : 0x00000000;
+	int x = dx + point_size;
+	int y = dy + point_size;
+	Uint32 * const target_pixel =
+	  (Uint32 *) ((Uint8 *) point_surface->pixels
+		      + y * point_surface->pitch
+		      + x * point_surface->format->BytesPerPixel);
+	*target_pixel = color;
+      }
+  point_texture = SDL_CreateTextureFromSurface(renderer[POINT_SCREEN],
+					       point_surface);
+  SDL_SetTextureBlendMode(point_texture, SDL_BLENDMODE_ADD);
+}
+
 // Move the slides given an (x,y) choice
 void move_sliders(int x, int y)
 {
   int middle_grove_x = (ZOOM_GROVE_X + SPEED_GROVE_X) / 2;
+  int middle_grove_x2 = (ZOOM_GROVE_X + POINTSIZE_GROVE_X) / 2;
   double ratio = pow(2, (y - ZOOM_GROVE_Y - ZOOM_GROVE_HEIGHT / 2.0)
 		     / ZOOM_LOG_RATIO);
+  double ratio2 = POINTSIZE_DIV * pow(2, (y - ZOOM_GROVE_Y
+					  - ZOOM_GROVE_HEIGHT / 2.0)
+				      / POINTSIZE_LOG_RATIO);
   if (x < middle_grove_x)
     rotation_speed = ratio;
-  else
+  else if (x < middle_grove_x2)
     zoom_ratio = ratio;
+  else
+    {
+      point_size = ratio2;
+      create_point_texture();
+    }
 }
 
 void create_text()
@@ -1233,6 +1285,7 @@ void service_left_button_on_control(int button_x, int button_y)
 	   - ROTATION_MODE_MARGIN_X) change_rotation_mode();
 }
 
+
 // data must be normalized to be in [-1,1]
 // color will be modified in place
 void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
@@ -1259,7 +1312,7 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
     }
   if (!font_found) ERROR("TTF_OpenFont error");
   create_text();
-  
+
   for(int i = 0; i < 100; i++) lrand48();
   SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
   
@@ -1317,6 +1370,9 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
   box[0][0] = 1;
   box[1][1] = 1;
 
+  SDL_Init(SDL_INIT_VIDEO);
+  atexit(SDL_Quit);
+      
   screen_init(POINT_SCREEN, 1, name, SCREEN_XPOS[POINT_SCREEN],
 	      SCREEN_YPOS[POINT_SCREEN]);
   SCREEN_HEIGHT[CONTROL_SCREEN] = MIN(MAX(CONTROL_Y_STEP * dim,
@@ -1338,7 +1394,18 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
   sprintf(image_file, "%s/%s", mojave_path, IMAGE_ROTATION_FILE);
   if ((image_rotation = SDL_LoadBMP(image_file))==NULL)
     ERROR("SDL_LoadBMP (rotation)");
+  sprintf(image_file, "%s/%s", mojave_path, IMAGE_SLIDER_SPEED_FILE);
+  if ((image_slider_speed = SDL_LoadBMP(image_file))==NULL)
+    ERROR("SDL_LoadBMP (slider_speed)");
+  sprintf(image_file, "%s/%s", mojave_path, IMAGE_SLIDER_ZOOM_FILE);
+  if ((image_slider_zoom = SDL_LoadBMP(image_file))==NULL)
+    ERROR("SDL_LoadBMP (slider_zoom)");
+  sprintf(image_file, "%s/%s", mojave_path, IMAGE_SLIDER_POINT_FILE);
+  if ((image_slider_point = SDL_LoadBMP(image_file))==NULL)
+    ERROR("SDL_LoadBMP (slider)");
 
+  create_point_texture();
+  
   SDL_Event event, dummy;
   int flag = 1;
   int refresh_flag = 1;
@@ -1361,10 +1428,8 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
       if (refresh_flag)
 	{
 	  // Point Screen	  
-	  for(int x=0;x<SCREEN_WIDTH[POINT_SCREEN];x++)
-	    for(int y=0;y<SCREEN_WIDTH[POINT_SCREEN];y++) point(POINT_SCREEN,x,y)=0;
-	  draw_points(num_data, data, color, hide);
-	  refresh(POINT_SCREEN);
+          SDL_RenderClear(renderer[POINT_SCREEN]);
+          draw_points(num_data, data, color, hide);
 
 	  // Control screen
 	  draw_controls();
@@ -1531,16 +1596,6 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		      refresh_flag = 1;
 		    }
 		  break;
-		case SDLK_PERIOD:
-		  refresh_flag = 1;
-                  SO_rotate(KEYBOARD_ROTATION_DX,
-			    KEYBOARD_ROTATION_DY);
-                  break;
-		case SDLK_COMMA:
-		  refresh_flag = 1;
-		  SO_rotate(-KEYBOARD_ROTATION_DX,
-			    -KEYBOARD_ROTATION_DY);
-		  break;
 		case SDLK_MINUS:
 		  zoom_ratio /= POINT_ZOOM_MULT;
 		  refresh_flag = 1;
@@ -1558,7 +1613,19 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		  rotation_speed *= ROTATION_SPEED_MULT;
 		  new_rotation_direction(rotation_seed);
 		  refresh_flag = 1;
-		  break;		 
+		  break;
+		case SDLK_COMMA:
+		  point_size -= POINT_SIZE_STEP;
+		  if (point_size < MIN_POINT_SIZE) point_size = MIN_POINT_SIZE;
+		  create_point_texture();
+		  refresh_flag = 1;
+		  break;
+		case SDLK_PERIOD:
+		  point_size += POINT_SIZE_STEP;
+		  if (point_size > MAX_POINT_SIZE) point_size = MAX_POINT_SIZE;
+		  create_point_texture();
+		  refresh_flag = 1;
+		  break;
 		}
 	    case SDL_MOUSEMOTION:
 	      if (frame_time != 0)
@@ -1605,7 +1672,6 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		  else if (event.window.windowID ==
 			   SDL_GetWindowID(screen[POINT_SCREEN]))
 		    {
-		      printf("MEOW\n");
 		      service_left_button_on_point(mouse_x, mouse_y,
 						  data, color, hide, num_data);
 		      refresh_flag = 1;
@@ -1617,7 +1683,6 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 	      undo_save(num_data, undo, undo_hide, color, hide);
 	      break;
 	    case SDL_MOUSEWHEEL:
-	      printf("MEOW %d %d\n", event.wheel.x, event.wheel.y);
 	      if (event.wheel.y > 0)
 		zoom_ratio /= POINT_ZOOM_MULT;		  
 	      else if (event.wheel.y < 0)

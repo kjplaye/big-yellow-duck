@@ -40,7 +40,8 @@ def mojave(X, cl = None, name = 'Mojave'):
         cl = np.zeros(len(X))
     cl_a = np.require(cl, dtype = 'int32').copy()
     cl_p = cl_a.ctypes._as_parameter_
-    _mojave.mojave(Xp, cl_p, Xa.shape[0], Xa.shape[1], window_name_bytes, my_path)
+    _mojave.mojave(Xp, cl_p, Xa.shape[0], Xa.shape[1], window_name_bytes,
+                   my_path.encode())
     return cl_a
 
 
