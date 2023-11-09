@@ -97,6 +97,10 @@
 #define DEFAULT_BRUSH_YSIZE 32
 #define OFFSCREEN -100
 #define PALETTE_ICON_SEPARATOR_X 490
+#define ERASER_BRUSH_COLOR 0x606060
+#define PI_CHART_SIZE 50
+#define PI_CHART_X 500
+#define PI_CHART_Y 90
 
 #define R_POWERS 13
 #define RX_THETA_MAX 0.01
@@ -379,54 +383,65 @@ void draw_controls()
       int number = i % MAX_TEXT_NUMBER;
       blt_text(CONTROL_SCREEN, text[number], CONTROL_NUMBER_XLOC,
 	       CONTROL_NUMBER_YLOC + i*CONTROL_Y_STEP - control_scroll, 0xa0a0a0);
-
+      
       // Circle displays
       for(int y=0;y<2*CONTROL_RADIUS;y++)
-	for(int x=0;x<2*CONTROL_RADIUS;x++)
-	  {
-	    int x0 = x - CONTROL_RADIUS;
-	    int y0 = y - CONTROL_RADIUS;
-	    if (SQR(x0) + SQR(y0) <= SQR(CONTROL_RADIUS))
-	      {
-		int yy = y + i*CONTROL_Y_STEP - control_scroll;
-		 if (yy >= 0 && yy <= SCREEN_HEIGHT[CONTROL_SCREEN])
-		  point(CONTROL_SCREEN,x + CONTROL_NUMBER_X,yy) = CONTROL_FG_COLOR;
-	      }
-	  }     
+	{
+	  int yy = y + i*CONTROL_Y_STEP - control_scroll;
+	  if (yy < 0 || yy >= SCREEN_HEIGHT[CONTROL_SCREEN]) continue;
+	  int y0 = y - CONTROL_RADIUS;
+	  for(int x=0;x<2*CONTROL_RADIUS;x++)
+	    {
+	      int xx = x + CONTROL_NUMBER_X;   	 
+	      int x0 = x - CONTROL_RADIUS;
+	      if (SQR(x0) + SQR(y0) <= SQR(CONTROL_RADIUS))
+		{
+		  if (xx < 0 || xx >= SCREEN_WIDTH[CONTROL_SCREEN]) continue;
+		  point(CONTROL_SCREEN, xx, yy) = CONTROL_FG_COLOR;
+		}
+	    }
+	}
       double dx = CONTROL_RADIUS * A[AA(i,0)];
       double dy = CONTROL_RADIUS * A[AA(i,1)];
       for(double r=0.0; r<1.0; r+=CONTROL_LINE_STEP)
 	{
 	  for(int dx2=-CONTROL_ARROW_THICKNESS;dx2<=CONTROL_ARROW_THICKNESS;dx2++)
-	    for(int dy2=-CONTROL_ARROW_THICKNESS;dy2<=CONTROL_ARROW_THICKNESS;dy2++)
-	      {
-		int yy = dy2 + (int)(i*CONTROL_Y_STEP+CONTROL_RADIUS+dy*r)
-		  - control_scroll;
-		if (yy >= 0 && yy <= SCREEN_HEIGHT[CONTROL_SCREEN])
-		  point(CONTROL_SCREEN, CONTROL_NUMBER_X + 
-			dx2 + (int)(CONTROL_RADIUS+dx*r), yy) = CONTROL_ARROW_COLOR;
-	      }
+	    {
+	      int xx =CONTROL_NUMBER_X + dx2 + (int)(CONTROL_RADIUS+dx*r);
+	      if (xx <= 0 || xx >= SCREEN_WIDTH[CONTROL_SCREEN]) continue;
+	      for(int dy2=-CONTROL_ARROW_THICKNESS;dy2<=CONTROL_ARROW_THICKNESS;
+		  dy2++)
+		{  		 
+		  int yy = dy2 + (int)(i*CONTROL_Y_STEP+CONTROL_RADIUS+dy*r)
+		    - control_scroll;
+		  if (yy <= 0 || yy >= SCREEN_HEIGHT[CONTROL_SCREEN]) continue;
+		  point(CONTROL_SCREEN, xx, yy) = CONTROL_ARROW_COLOR;
+		}
+	    }
 	}
-
+      
       // Boxes
       SDL_Surface * box_text[4] = {text_x, text_y, text_r, text_xy};
       for(int bi = 0; bi < CONTROL_NUM_BOX; bi++)
 	{
 	  for(int y=-CONTROL_BOX_RADIUS;y<=CONTROL_BOX_RADIUS;y++)
-	    for(int x=-CONTROL_BOX_RADIUS;x<=CONTROL_BOX_RADIUS;x++)
-	      {
-		int color;
-		if (y==-CONTROL_BOX_RADIUS || x==-CONTROL_BOX_RADIUS ||	\
-		    y==CONTROL_BOX_RADIUS || x==CONTROL_BOX_RADIUS)
-		  color = CONTROL_BOX_FG;
-		else
-		  color = box[i][bi] ? CONTROL_BOX_SELECT : CONTROL_BOX_BG;
-		int yy = y+i*CONTROL_Y_STEP + CONTROL_RADIUS - control_scroll;
-		if (yy >= 0 && yy <= SCREEN_HEIGHT[CONTROL_SCREEN])		
-		  point(CONTROL_SCREEN, CONTROL_NUMBER_X + 
-			x+CONTROL_Y_STEP*(bi+CONTROL_BOX_SHIFT) + CONTROL_RADIUS, yy
-			) = color;
-	      }
+	    {
+	      int yy = y+i*CONTROL_Y_STEP + CONTROL_RADIUS - control_scroll;
+	      if (yy < 0 || yy >= SCREEN_HEIGHT[CONTROL_SCREEN]) continue;
+	      for(int x=-CONTROL_BOX_RADIUS;x<=CONTROL_BOX_RADIUS;x++)
+		{
+		  int xx = CONTROL_NUMBER_X +
+		    x+CONTROL_Y_STEP*(bi+CONTROL_BOX_SHIFT) + CONTROL_RADIUS;
+		  if (xx < 0 || xx >= SCREEN_WIDTH[CONTROL_SCREEN]) continue;
+		  int color;
+		  if (y==-CONTROL_BOX_RADIUS || x==-CONTROL_BOX_RADIUS || \
+		      y==CONTROL_BOX_RADIUS || x==CONTROL_BOX_RADIUS)
+		    color = CONTROL_BOX_FG;
+		  else
+		    color = box[i][bi] ? CONTROL_BOX_SELECT : CONTROL_BOX_BG;
+		  point(CONTROL_SCREEN, xx, yy) = color;
+		}
+	    }
 	  int x = 27+CONTROL_NUMBER_X + CONTROL_Y_STEP*(bi+CONTROL_BOX_SHIFT);
 	  int y = i*CONTROL_Y_STEP + CONTROL_RADIUS - control_scroll - 13;
 	  if (bi == 3) x-=12;
@@ -436,7 +451,8 @@ void draw_controls()
 
   // Rotation mode indicator
   blt(image_rotation, CONTROL_SCREEN,
-      SCREEN_WIDTH[CONTROL_SCREEN] - ROTATION_MODE_MARGIN_X - ROTATION_MODE_BOX_SIZE,
+      SCREEN_WIDTH[CONTROL_SCREEN] - ROTATION_MODE_MARGIN_X
+      - ROTATION_MODE_BOX_SIZE,
       ROTATION_MODE_MARGIN_Y,
       ROTATION_MODE_BOX_SIZE, ROTATION_MODE_BOX_SIZE,
       rotation_mode_color[rotation_mode]);
@@ -468,6 +484,15 @@ void draw_controls()
       ROTATION_MODE_MARGIN_Y + 55,
       ROTATION_MODE_BOX_SIZE/1.7, ROTATION_MODE_BOX_SIZE/1.7,
       0xa0a0ff);
+}
+
+int cmp_int(const void * p1, const void * p2)
+{
+  int x1 = *((int *) p1);
+  int x2 = *((int *) p2);
+  if (x1 < x2) return -1;
+  if (x2 < x1) return 1;
+  return 0;
 }
 
 // Draws the brush window
@@ -612,7 +637,21 @@ void draw_palette(int num_data, double (*data)[dim], int32_t * color)
   blt_text(BRUSH_SCREEN, text_surface,
 	   SCREEN_WIDTH[BRUSH_SCREEN] - 2 * BRUSH_MODE_MARGIN -
 	   2 *BRUSH_MODE_BOX_SIZE, 40 + 130, 0xa0a0a0);
-  SDL_FreeSurface(text_surface);  
+  SDL_FreeSurface(text_surface);
+
+  // Pie-chart
+  int sorted_color[num_data];
+  for(int i=0;i<num_data;i++) sorted_color[i] = get_color(color[i]);
+  qsort(sorted_color, num_data, sizeof(int), &cmp_int);
+  for(int y=0;y<2*PI_CHART_SIZE;y++)
+    for(int x=0;x<2*PI_CHART_SIZE;x++)
+      {
+	int dx = x - PI_CHART_SIZE;
+	int dy = y - PI_CHART_SIZE;
+        if (SQR(dx) + SQR(dy) >= SQR(PI_CHART_SIZE)) continue;
+	point(BRUSH_SCREEN, x + PI_CHART_X, y + PI_CHART_Y) =
+	  sorted_color[(int)(num_data * (atan2(dy,dx) + M_PI) / (2 * M_PI))];
+      }
 }
 
 void xy_tally(int *xy_dim, int *xy_cnt)
@@ -679,6 +718,7 @@ void draw_points(int num_data, double (*data)[dim], int32_t * color, int32_t * h
   // Draw brush rectangle
   unsigned brush_cursor_color = (brush_color_mode == BRUSH_COLOR_MODE_DIRECT) ?
     brush_color[selected_color] : COLOR_HASH(selected_color, brush_color_mode);
+  if (erase_mode_on) brush_cursor_color = ERASER_BRUSH_COLOR;
   if (brush_x >= 0 && brush_y >= 0)
     {
       SDL_Rect rect = {brush_x, brush_y, brush_xsize, brush_ysize};
@@ -687,7 +727,10 @@ void draw_points(int num_data, double (*data)[dim], int32_t * color, int32_t * h
 			     (brush_cursor_color >> 8) & 0xff,
 			     (brush_cursor_color >> 0) & 0xff,
 			     255);
-      SDL_RenderDrawRect(renderer[POINT_SCREEN], &rect);
+      if (erase_mode_on)
+	SDL_RenderFillRect(renderer[POINT_SCREEN], &rect);
+      else
+	SDL_RenderDrawRect(renderer[POINT_SCREEN], &rect);
       SDL_SetRenderDrawColor(renderer[POINT_SCREEN], 0,0,0,255);         
   }
 
@@ -1372,15 +1415,19 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 
   SDL_Init(SDL_INIT_VIDEO);
   atexit(SDL_Quit);
-      
+
+  char brush_window_name[MAX_STRING];
+  char control_window_name[MAX_STRING];
+  sprintf(brush_window_name, "%s - Brush", name);
+  sprintf(control_window_name, "%s - Control", name);  
   screen_init(POINT_SCREEN, 1, name, SCREEN_XPOS[POINT_SCREEN],
 	      SCREEN_YPOS[POINT_SCREEN]);
   SCREEN_HEIGHT[CONTROL_SCREEN] = MIN(MAX(CONTROL_Y_STEP * dim,
 					  ZOOM_GROVE_Y + ZOOM_GROVE_HEIGHT + 20),
 				      SCREEN_HEIGHT[CONTROL_SCREEN]);
-  screen_init(CONTROL_SCREEN, 1, "Controls", SCREEN_XPOS[CONTROL_SCREEN],
+  screen_init(CONTROL_SCREEN, 1, control_window_name, SCREEN_XPOS[CONTROL_SCREEN],
 	      SCREEN_YPOS[CONTROL_SCREEN]);    
-  screen_init(BRUSH_SCREEN, 1, "Brush", SCREEN_XPOS[BRUSH_SCREEN],
+  screen_init(BRUSH_SCREEN, 1, brush_window_name, SCREEN_XPOS[BRUSH_SCREEN],
 	      SCREEN_YPOS[BRUSH_SCREEN]);
   SDL_SetRenderDrawColor(renderer[POINT_SCREEN],0,0,0,255);
 
@@ -1491,7 +1538,6 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		  break;
 		case SDLK_SPACE:
 		  for(int i=0;i<num_data;i++) hide[i] = 0;
-		  clear_all();
 		  new_rotation_direction(RANDOM_SEED);
 		  refresh_flag = 1;
 		  break;
@@ -1536,6 +1582,10 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		      color_picker(&mouse_x, &mouse_y, data, color, num_data);
 		      refresh_flag = 1;
 		    }
+		  break;
+		case SDLK_i:
+		  printf("Estimated frame rate is %6.02f fps\n",
+			 1000.0 / frame_time);
 		  break;
 		case SDLK_DOWN:
 		  control_scroll += CONTROL_SCROLL_DELTA;

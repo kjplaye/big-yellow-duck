@@ -1,5 +1,6 @@
 from ctypes import *
 from subprocess import Popen, PIPE
+import multiprocessing as mp
 import numpy as np
 import os
 
@@ -7,7 +8,16 @@ import os
 my_path = os.path.dirname(os.path.abspath(__file__))
 _mojave = cdll.LoadLibrary(my_path + '/_mojave.so')
 
-def mojave(X, cl = None, name = 'Mojave'):
+def _do_mojave(queue, X, cl, window_name, my_path):
+    Xa = np.require(X, dtype = 'float64')
+    Xp = Xa.ctypes._as_parameter_
+    cl_a = np.require(cl, dtype = 'int32').copy()
+    cl_p = cl_a.ctypes._as_parameter_
+    _mojave.mojave(Xp, cl_p, Xa.shape[0], Xa.shape[1],
+                   window_name.encode(), my_path.encode())
+    queue.put(cl_a)
+    
+def mojave(X, cl = None, window_name = 'Mojave'):
     """
     Parameters
     ----------
@@ -28,20 +38,16 @@ def mojave(X, cl = None, name = 'Mojave'):
     >>> D = V[cl_in] + np.array([X,Y,np.zeros(2000),bit]).T + N
     >>> cl_out = mojave(D,cl_in)
     """
-    window_name_bytes = name.encode()
     X0 = np.array(X)
     delta = np.max(X0,0) - np.min(X0,0)
     delta[delta == 0] = 1
     X1 = 2.0 * ((X0 - np.min(X0,0)) / delta) - 1.0
     X1[:,delta == 0] = 0
-    Xa = np.require(X1, dtype = 'float64')
-    Xp = Xa.ctypes._as_parameter_
     if cl is None:
         cl = np.zeros(len(X))
-    cl_a = np.require(cl, dtype = 'int32').copy()
-    cl_p = cl_a.ctypes._as_parameter_
-    _mojave.mojave(Xp, cl_p, Xa.shape[0], Xa.shape[1], window_name_bytes,
-                   my_path.encode())
-    return cl_a
-
-
+    queue = mp.Queue()
+    args = [queue, X1, cl, window_name, my_path]
+    p = mp.Process(target = _do_mojave, args = args)
+    p.start()
+    p.join()
+    return queue.get()

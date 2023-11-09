@@ -89,6 +89,11 @@ class pca:
         	return ggobi(self.U[:,:dims])
     	else:
         	return ggobi(self.U[:,:dims], input_clusters)
+    def mojave(self, input_clusters = None, dims = 20):
+    	if input_clusters is None:
+        	return mojave(self.U[:,:dims])
+    	else:
+        	return mojave(self.U[:,:dims], input_clusters)
     def __repr__(self, threshold_bits = 20.0):
         mp_thresh = self.get_mp_threshold()
         header = ['ind','MP','PV','sv','zscr','bits']
