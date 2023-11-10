@@ -98,9 +98,9 @@
 #define OFFSCREEN -100
 #define PALETTE_ICON_SEPARATOR_X 490
 #define ERASER_BRUSH_COLOR 0x606060
-#define PI_CHART_SIZE 50
-#define PI_CHART_X 500
-#define PI_CHART_Y 90
+#define PIE_CHART_SIZE 50
+#define PIE_CHART_X 500
+#define PIE_CHART_Y 90
 
 #define R_POWERS 13
 #define RX_THETA_MAX 0.01
@@ -645,18 +645,18 @@ void draw_palette(int num_data, double (*data)[dim], int32_t * color,
   for(int i=0;i<num_data;i++) sorted_color[i] =
 				(((uint64_t) get_color(color[i]) ) << 32) + hide[i];
   qsort(sorted_color, num_data, sizeof(uint64_t), &cmp_int);
-  for(int y=0;y<2*PI_CHART_SIZE;y++)
-    for(int x=0;x<2*PI_CHART_SIZE;x++)
+  for(int y=0;y<2*PIE_CHART_SIZE;y++)
+    for(int x=0;x<2*PIE_CHART_SIZE;x++)
       {
-	int dx = x - PI_CHART_SIZE;
-	int dy = y - PI_CHART_SIZE;
+	int dx = x - PIE_CHART_SIZE;
+	int dy = y - PIE_CHART_SIZE;
 	int c = 0;
-        if (SQR(dx) + SQR(dy) >= SQR(PI_CHART_SIZE)) continue;
+        if (SQR(dx) + SQR(dy) >= SQR(PIE_CHART_SIZE)) continue;
 	uint64_t sc = sorted_color[(int)(num_data * (atan2(dy,dx) + M_PI)
 					 / (2 * M_PI))];
-	if (SQR(dx) + SQR(dy) >= SQR(PI_CHART_SIZE/2.0) || !(sc & 0xffffffff))
-	  c = sc >> 32;
-	point(BRUSH_SCREEN, x + PI_CHART_X, y + PI_CHART_Y) = c;	  
+	if (SQR(dx) + SQR(dy) >= SQR(3.0*PIE_CHART_SIZE/4.0)
+	    || !(sc & 0xffffffff)) c = sc >> 32;
+	point(BRUSH_SCREEN, x + PIE_CHART_X, y + PIE_CHART_Y) = c;	  
       }
 }
 
