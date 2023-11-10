@@ -488,15 +488,16 @@ void draw_controls()
 
 int cmp_int(const void * p1, const void * p2)
 {
-  int x1 = *((int *) p1);
-  int x2 = *((int *) p2);
+  uint64_t x1 = *((uint64_t *) p1);
+  uint64_t x2 = *((uint64_t *) p2);
   if (x1 < x2) return -1;
   if (x2 < x1) return 1;
   return 0;
 }
 
 // Draws the brush window
-void draw_palette(int num_data, double (*data)[dim], int32_t * color)
+void draw_palette(int num_data, double (*data)[dim], int32_t * color,
+		  int32_t * hide)
 {
   unsigned mask = 0;
   for(int i = 0; i < num_data; i++) mask |= color[i];
@@ -640,17 +641,22 @@ void draw_palette(int num_data, double (*data)[dim], int32_t * color)
   SDL_FreeSurface(text_surface);
 
   // Pie-chart
-  int sorted_color[num_data];
-  for(int i=0;i<num_data;i++) sorted_color[i] = get_color(color[i]);
-  qsort(sorted_color, num_data, sizeof(int), &cmp_int);
+  uint64_t sorted_color[num_data];
+  for(int i=0;i<num_data;i++) sorted_color[i] =
+				(((uint64_t) get_color(color[i]) ) << 32) + hide[i];
+  qsort(sorted_color, num_data, sizeof(uint64_t), &cmp_int);
   for(int y=0;y<2*PI_CHART_SIZE;y++)
     for(int x=0;x<2*PI_CHART_SIZE;x++)
       {
 	int dx = x - PI_CHART_SIZE;
 	int dy = y - PI_CHART_SIZE;
+	int c = 0;
         if (SQR(dx) + SQR(dy) >= SQR(PI_CHART_SIZE)) continue;
-	point(BRUSH_SCREEN, x + PI_CHART_X, y + PI_CHART_Y) =
-	  sorted_color[(int)(num_data * (atan2(dy,dx) + M_PI) / (2 * M_PI))];
+	uint64_t sc = sorted_color[(int)(num_data * (atan2(dy,dx) + M_PI)
+					 / (2 * M_PI))];
+	if (SQR(dx) + SQR(dy) >= SQR(PI_CHART_SIZE/2.0) || !(sc & 0xffffffff))
+	  c = sc >> 32;
+	point(BRUSH_SCREEN, x + PI_CHART_X, y + PI_CHART_Y) = c;	  
       }
 }
 
@@ -1483,7 +1489,7 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 	  refresh(CONTROL_SCREEN);
 
 	  // Brush screen
-	  draw_palette(num_data, data, color);
+	  draw_palette(num_data, data, color, hide);
 	  refresh(BRUSH_SCREEN);
 	}
       refresh_flag = 0;
