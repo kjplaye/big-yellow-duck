@@ -26,6 +26,30 @@ def mojave(X, cl = None, window_name = 'Mojave'):
     cl : array_like, optional
         Cluster labels (or colors), we make up colors and glyphs.
 
+    KEYS:
+       C              : Change color mode
+       D              : Decimate
+       E              : Eraser mode
+       H              : Hide current color
+       I              : Info
+       N              : Next color
+       O              : Color picker      
+       Q              : Quit
+       R              : Rotation mode
+       S              : Zoom Standard
+       X              : x/y plots
+       Y              : Redo
+       Z              : Undo
+       Comma/Period   : Change point size
+       Dowm/Up        : Scroll control down/up
+       Equals/Minus   : Change zoom setting
+       Left/Right     : Change brush color
+       LR Bracket     : Change rotation speed
+       PgDn/PgUp      : Scroll control down/up (faster)
+       Colon/Quote    : Change intensity
+       Space          : Change rotation angles
+       
+
     USAGE EXAMPLE:
     >>> import numpy as np
     >>> cl_in = np.random.randint(4,size = (2000))
