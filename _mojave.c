@@ -25,6 +25,8 @@
 #define IMAGE_SLIDER_SPEED_FILE "mojave_speed.bmp"
 #define IMAGE_SLIDER_ZOOM_FILE "mojave_zoom.bmp"
 #define IMAGE_SLIDER_POINT_FILE "mojave_point.bmp"
+#define IMAGE_SLIDER_INTENSITY_FILE "mojave_intensity.bmp"
+#define IMAGE_CUT_FILE "mojave_cut.bmp"
 
 #define TTF_FILE_FILES {"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf"}
 #define FONT_NUM_LOCATIONS 2
@@ -33,7 +35,7 @@
 #define CONTROL_SCREEN 1
 #define BRUSH_SCREEN 2
 #define SCREENS 3
-#define SCREEN_WIDTHS {800,620,800}
+#define SCREEN_WIDTHS {800,660,800}
 #define SCREEN_HEIGHTS {800,1000,200}
 #define SCREEN_XPOSES {0,850,0}
 #define SCREEN_YPOSES {0,0,900}
@@ -69,8 +71,10 @@
 #define ZOOM_LOG_RATIO 18.0
 #define SPEED_GROVE_X 440
 #define POINTSIZE_GROVE_X 520
+#define INTENSITY_GROVE_X 560
 #define RANDOM_SEED (lrand48())
 #define CONTROL_SCROLL_DELTA 20
+#define CONTROL_SCROLL_DELTA_PAGE 200
 #define POINTSIZE_LOG_RATIO 80.0
 #define POINTSIZE_DIV 4.0
 
@@ -114,6 +118,7 @@
 #define MIN_POINT_SIZE 1
 #define MAX_POINT_SIZE 16
 #define POINT_SIZE_STEP 0.75
+#define MAX_DECIMATION_MODE 4
 
 #define SQR(x) ((x)*(x))
 #define LCG(x) ((134775813 * (x) + 2531011) & 0xffffff)
@@ -163,11 +168,15 @@ SDL_Surface *image_rotation;
 SDL_Surface *image_slider_speed;
 SDL_Surface *image_slider_zoom;
 SDL_Surface *image_slider_point;
+SDL_Surface *image_slider_intensity;
+SDL_Surface *image_cut;
 
 // box is shape (dim, num-boxes)
 int (*box)[CONTROL_NUM_BOX];
 
 // point rendering
+double gamma_correct = 1.0;
+unsigned char gamma_map[256];
 double point_size = DEFAULT_POINT_SIZE;
 SDL_Surface * point_surface = NULL;
 SDL_Texture * point_texture = NULL;
@@ -180,6 +189,12 @@ int selected_color = 0;
 
 // Pallete mode modifier.
 int use_color_hash = 0;
+
+// Decimation mode
+int decimation_mode = 0;
+uint32_t decimation_color[MAX_DECIMATION_MODE] = {0x0000ff, 0x00ff00, 0xffff00,
+                                                  0xff0000};
+int decimation[MAX_DECIMATION_MODE] = {1,10,100,1000};
 
 // brush info
 int brush_color_mode = 0;
@@ -452,10 +467,18 @@ void draw_controls()
   // Rotation mode indicator
   blt(image_rotation, CONTROL_SCREEN,
       SCREEN_WIDTH[CONTROL_SCREEN] - ROTATION_MODE_MARGIN_X
-      - ROTATION_MODE_BOX_SIZE,
+      - ROTATION_MODE_BOX_SIZE - 60,
       ROTATION_MODE_MARGIN_Y,
       ROTATION_MODE_BOX_SIZE, ROTATION_MODE_BOX_SIZE,
       rotation_mode_color[rotation_mode]);
+
+  // Decimation indicator
+  blt(image_cut, CONTROL_SCREEN,
+      SCREEN_WIDTH[CONTROL_SCREEN] - ROTATION_MODE_MARGIN_X
+      - ROTATION_MODE_BOX_SIZE + 20,
+      ROTATION_MODE_MARGIN_Y - 3,
+      ROTATION_MODE_BOX_SIZE, ROTATION_MODE_BOX_SIZE,
+      decimation_color[decimation_mode]);
 
   // Draw sliders
   draw_slider(ZOOM_LOG_RATIO, zoom_ratio, ZOOM_GROVE_WIDTH, ZOOM_GROVE_HEIGHT,
@@ -467,26 +490,34 @@ void draw_controls()
   draw_slider(POINTSIZE_LOG_RATIO, point_size/POINTSIZE_DIV, ZOOM_GROVE_WIDTH,
 	      ZOOM_GROVE_HEIGHT, POINTSIZE_GROVE_X, ZOOM_GROVE_Y, ZOOM_SLIDER_WIDTH,
 	      ZOOM_SLIDER_HEIGHT, ZOOM_GROVE_COLOR, ZOOM_SLIDER_COLOR);
+  draw_slider(ZOOM_LOG_RATIO, gamma_correct, ZOOM_GROVE_WIDTH,
+	      ZOOM_GROVE_HEIGHT, INTENSITY_GROVE_X, ZOOM_GROVE_Y, ZOOM_SLIDER_WIDTH,
+	      ZOOM_SLIDER_HEIGHT, ZOOM_GROVE_COLOR, ZOOM_SLIDER_COLOR);
 
   // Slider indicators
   blt(image_slider_speed, CONTROL_SCREEN,
-      SCREEN_WIDTH[CONTROL_SCREEN] - ROTATION_MODE_MARGIN_X - 81,
+      SCREEN_WIDTH[CONTROL_SCREEN] - ROTATION_MODE_MARGIN_X - 81 - 40,
       ROTATION_MODE_MARGIN_Y + 55,
       ROTATION_MODE_BOX_SIZE/1.7, ROTATION_MODE_BOX_SIZE/1.7,
       0xa0a0ff);
   blt(image_slider_zoom, CONTROL_SCREEN,
-      SCREEN_WIDTH[CONTROL_SCREEN] - ROTATION_MODE_MARGIN_X - 81 + 40,
+      SCREEN_WIDTH[CONTROL_SCREEN] - ROTATION_MODE_MARGIN_X - 81,
       ROTATION_MODE_MARGIN_Y + 55,
       ROTATION_MODE_BOX_SIZE/1.7, ROTATION_MODE_BOX_SIZE/1.7,
       0xa0a0ff);
   blt(image_slider_point, CONTROL_SCREEN,
+      SCREEN_WIDTH[CONTROL_SCREEN] - ROTATION_MODE_MARGIN_X - 81 + 40,
+      ROTATION_MODE_MARGIN_Y + 55,
+      ROTATION_MODE_BOX_SIZE/1.7, ROTATION_MODE_BOX_SIZE/1.7,
+      0xa0a0ff);
+  blt(image_slider_intensity, CONTROL_SCREEN,
       SCREEN_WIDTH[CONTROL_SCREEN] - ROTATION_MODE_MARGIN_X - 81 + 80,
       ROTATION_MODE_MARGIN_Y + 55,
       ROTATION_MODE_BOX_SIZE/1.7, ROTATION_MODE_BOX_SIZE/1.7,
       0xa0a0ff);
 }
 
-int cmp_int(const void * p1, const void * p2)
+int cmp_int64(const void * p1, const void * p2)
 {
   uint64_t x1 = *((uint64_t *) p1);
   uint64_t x2 = *((uint64_t *) p2);
@@ -644,7 +675,7 @@ void draw_palette(int num_data, double (*data)[dim], int32_t * color,
   uint64_t sorted_color[num_data];
   for(int i=0;i<num_data;i++) sorted_color[i] =
 				(((uint64_t) get_color(color[i]) ) << 32) + hide[i];
-  qsort(sorted_color, num_data, sizeof(uint64_t), &cmp_int);
+  qsort(sorted_color, num_data, sizeof(uint64_t), &cmp_int64);
   for(int y=0;y<2*PIE_CHART_SIZE;y++)
     for(int x=0;x<2*PIE_CHART_SIZE;x++)
       {
@@ -653,7 +684,7 @@ void draw_palette(int num_data, double (*data)[dim], int32_t * color,
 	int c = 0;
         if (SQR(dx) + SQR(dy) >= SQR(PIE_CHART_SIZE)) continue;
 	uint64_t sc = sorted_color[(int)(num_data * (atan2(dy,dx) + M_PI)
-					 / (2 * M_PI))];
+					 / (2 * M_PI + 0.0001))];
 	if (SQR(dx) + SQR(dy) >= SQR(3.0*PIE_CHART_SIZE/4.0)
 	    || !(sc & 0xffffffff)) c = sc >> 32;
 	point(BRUSH_SCREEN, x + PIE_CHART_X, y + PIE_CHART_Y) = c;	  
@@ -672,7 +703,10 @@ void draw_point(int x, int y, unsigned c)
 {
   SDL_Rect dst_rect = {x - point_size, y - point_size,
 		       point_surface->w, point_surface->h};
-  SDL_SetTextureColorMod(point_texture, (c>>16) & 0xff, (c>>8) & 0xff, c & 0xff);
+  int r = gamma_map[(c>>16) & 0xff];
+  int g = gamma_map[(c>>8) & 0xff];
+  int b = gamma_map[(c>>0) & 0xff];
+  SDL_SetTextureColorMod(point_texture, r, g, b);
   SDL_RenderCopy(renderer[POINT_SCREEN], point_texture, NULL, &dst_rect);
 }
 
@@ -691,7 +725,7 @@ void draw_points(int num_data, double (*data)[dim], int32_t * color, int32_t * h
 	for(int j=0;j<xy_cnt;j++)
 	  {
 	    // Draw points
-	    for(int k=0;k<num_data;k++)
+	    for(int k=0;k<num_data;k+=decimation[decimation_mode])
 	      {
 		if (hide[k]) continue;
 		double x,y;
@@ -710,7 +744,7 @@ void draw_points(int num_data, double (*data)[dim], int32_t * color, int32_t * h
   else
     {
       // Standard plot
-      for(int i=0; i < num_data; i++)
+      for(int i=0; i < num_data; i+=decimation[decimation_mode])
 	{
    	  if (hide[i]) continue;
 	  double x,y;
@@ -929,24 +963,39 @@ void create_point_texture()
   SDL_SetTextureBlendMode(point_texture, SDL_BLENDMODE_ADD);
 }
 
+void set_gamma()
+{
+  for(int i=0;i<256;i++) gamma_map[i] = 256 * pow(i/256.0, gamma_correct);
+}
+
 // Move the slides given an (x,y) choice
 void move_sliders(int x, int y)
 {
+  int middle_grove_x0 = (ZOOM_GROVE_X + SPEED_GROVE_X - 40) / 2;
   int middle_grove_x = (ZOOM_GROVE_X + SPEED_GROVE_X) / 2;
   int middle_grove_x2 = (ZOOM_GROVE_X + POINTSIZE_GROVE_X) / 2;
+  int middle_grove_x3 = (ZOOM_GROVE_X + INTENSITY_GROVE_X) / 2;
   double ratio = pow(2, (y - ZOOM_GROVE_Y - ZOOM_GROVE_HEIGHT / 2.0)
 		     / ZOOM_LOG_RATIO);
   double ratio2 = POINTSIZE_DIV * pow(2, (y - ZOOM_GROVE_Y
 					  - ZOOM_GROVE_HEIGHT / 2.0)
 				      / POINTSIZE_LOG_RATIO);
-  if (x < middle_grove_x)
-    rotation_speed = ratio;
-  else if (x < middle_grove_x2)
+  if (x < middle_grove_x && x >= middle_grove_x0)
+    {
+      rotation_speed = ratio;
+      new_rotation_direction(rotation_seed);
+    }
+  else if (x < middle_grove_x2 && x > middle_grove_x0)
     zoom_ratio = ratio;
-  else
+  else if (x >= middle_grove_x2 && x < middle_grove_x3)
     {
       point_size = ratio2;
       create_point_texture();
+    }
+  else if (x >= middle_grove_x3)
+    {
+      gamma_correct = ratio;
+      set_gamma();
     }
 }
 
@@ -1247,7 +1296,8 @@ void service_mouse_motion_on_point(int mouse_x, int mouse_y, int mouse_state,
     }
 }
 
-void service_left_button_on_brush(int button_x, int button_y)
+void service_left_button_on_brush(int button_x, int button_y, double (*data)[dim],
+				  int * color, int num_data)
 {
   if (button_y < 100)
     {
@@ -1269,6 +1319,24 @@ void service_left_button_on_brush(int button_x, int button_y)
 	  int c0 = selected_color - 4;
 	  if (c0 < 0) c0 = 0;
 	  selected_color = c0 + c;
+	}
+    }
+  else if (button_x >= PIE_CHART_X && button_y >= PIE_CHART_Y &&
+	   button_x < PIE_CHART_X + 2*PIE_CHART_SIZE &&
+	   button_y < PIE_CHART_Y + 2*PIE_CHART_SIZE)
+    {
+      int dx = button_x - (PIE_CHART_X + PIE_CHART_SIZE);
+      int dy = button_y - (PIE_CHART_Y + PIE_CHART_SIZE);
+      if (SQR(dx) + SQR(dy) < SQR(PIE_CHART_SIZE))
+	{
+	  uint64_t sorted_color[num_data];
+	  for(int i=0;i<num_data;i++) sorted_color[i] =
+					(((uint64_t) get_color(color[i]) ) << 32)
+					+ color[i];
+	  qsort(sorted_color, num_data, sizeof(uint64_t), &cmp_int64);
+	  uint32_t sc = sorted_color[(int)(num_data * (atan2(dy,dx) + M_PI)
+					   / (2 * M_PI + 0.0001))] & 0xffffffff;
+	  selected_color = sc;
 	}
     }
   else if (button_x >= SCREEN_WIDTH[BRUSH_SCREEN]
@@ -1329,9 +1397,20 @@ void service_left_button_on_control(int button_x, int button_y)
 	   button_y < ROTATION_MODE_MARGIN_Y +
 	   ROTATION_MODE_BOX_SIZE &&
 	   button_x >= SCREEN_WIDTH[CONTROL_SCREEN]
-	   - ROTATION_MODE_MARGIN_X - ROTATION_MODE_BOX_SIZE &&
+	   - ROTATION_MODE_MARGIN_X - ROTATION_MODE_BOX_SIZE - 60 &&
 	   button_x <= SCREEN_WIDTH[CONTROL_SCREEN]
-	   - ROTATION_MODE_MARGIN_X) change_rotation_mode();
+	   - ROTATION_MODE_MARGIN_X - 80) change_rotation_mode();
+  else if
+    (button_y >= ROTATION_MODE_MARGIN_Y &&
+     button_y < ROTATION_MODE_MARGIN_Y +
+	   ROTATION_MODE_BOX_SIZE &&
+	   button_x >= SCREEN_WIDTH[CONTROL_SCREEN]
+	   - ROTATION_MODE_MARGIN_X - ROTATION_MODE_BOX_SIZE + 20 &&
+	   button_x <= SCREEN_WIDTH[CONTROL_SCREEN]
+	   - ROTATION_MODE_MARGIN_X)
+    {
+      if (++decimation_mode == MAX_DECIMATION_MODE) decimation_mode = 0;
+    }
 }
 
 
@@ -1340,6 +1419,8 @@ void service_left_button_on_control(int button_x, int button_y)
 void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 	    char * name, char * mojave_path)
 {
+  set_gamma();
+  
   int32_t * hide;
   if ((hide = malloc(sizeof(int32_t) * num_data)) == 0)
     {
@@ -1455,7 +1536,13 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
     ERROR("SDL_LoadBMP (slider_zoom)");
   sprintf(image_file, "%s/%s", mojave_path, IMAGE_SLIDER_POINT_FILE);
   if ((image_slider_point = SDL_LoadBMP(image_file))==NULL)
-    ERROR("SDL_LoadBMP (slider)");
+    ERROR("SDL_LoadBMP (slider_point)");
+  sprintf(image_file, "%s/%s", mojave_path, IMAGE_SLIDER_INTENSITY_FILE);
+  if ((image_slider_intensity = SDL_LoadBMP(image_file))==NULL)
+    ERROR("SDL_LoadBMP (slider_intensity)");
+  sprintf(image_file, "%s/%s", mojave_path, IMAGE_CUT_FILE);
+  if ((image_cut = SDL_LoadBMP(image_file))==NULL)
+    ERROR("SDL_LoadBMP (cut)");
 
   create_point_texture();
   
@@ -1592,6 +1679,8 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		case SDLK_i:
 		  printf("Estimated frame rate is %6.02f fps\n",
 			 1000.0 / frame_time);
+		  printf("Current color = %08x\n", selected_color);
+		  printf("Data size = (%d, %d)\n", num_data, dim);
 		  break;
 		case SDLK_DOWN:
 		  control_scroll += CONTROL_SCROLL_DELTA;
@@ -1603,7 +1692,18 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		  control_scroll -= CONTROL_SCROLL_DELTA;
 		  if (control_scroll < 0) control_scroll = 0;
 		  refresh_flag = 1;
+		  break;		 
+		case SDLK_PAGEDOWN:
+		  control_scroll += CONTROL_SCROLL_DELTA_PAGE;
+		  int max_y2 = dim * CONTROL_Y_STEP - SCREEN_HEIGHT[CONTROL_SCREEN];
+		  if (control_scroll > max_y2) control_scroll = max_y2;
+		  refresh_flag = 1;
 		  break;
+		case SDLK_PAGEUP:
+		  control_scroll -= CONTROL_SCROLL_DELTA_PAGE;
+		  if (control_scroll < 0) control_scroll = 0;
+		  refresh_flag = 1;
+		  break;   
  		case SDLK_LEFT:
 		  selected_color--;
 		  if (brush_color_mode == BRUSH_COLOR_MODE_DIRECT)
@@ -1682,6 +1782,16 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		  create_point_texture();
 		  refresh_flag = 1;
 		  break;
+		case SDLK_SEMICOLON:
+		  gamma_correct *= 1.05;
+		  set_gamma();
+		  refresh_flag = 1;
+		  break;
+		case SDLK_QUOTE:
+		  gamma_correct /= 1.05;
+		  set_gamma();
+		  refresh_flag = 1;
+		  break;
 		}
 	    case SDL_MOUSEMOTION:
 	      if (frame_time != 0)
@@ -1722,7 +1832,8 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		  else if (event.window.windowID ==
 			   SDL_GetWindowID(screen[BRUSH_SCREEN]))
 		    {
-		      service_left_button_on_brush(event.button.x, event.button.y);
+		      service_left_button_on_brush(event.button.x, event.button.y,
+						   data, color, num_data);
 		      refresh_flag = 1;
 		    }
 		  else if (event.window.windowID ==
@@ -1739,10 +1850,48 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 	      undo_save(num_data, undo, undo_hide, color, hide);
 	      break;
 	    case SDL_MOUSEWHEEL:
-	      if (event.wheel.y > 0)
-		zoom_ratio /= POINT_ZOOM_MULT;		  
-	      else if (event.wheel.y < 0)
-		zoom_ratio *= POINT_ZOOM_MULT;		  
+	      if  (event.window.windowID ==
+		   SDL_GetWindowID(screen[POINT_SCREEN]))
+		{
+		  if (event.wheel.y > 0)
+		    zoom_ratio /= POINT_ZOOM_MULT;		  
+		  else if (event.wheel.y < 0)
+		    zoom_ratio *= POINT_ZOOM_MULT;		  
+		}
+	      else if (event.window.windowID ==
+		       SDL_GetWindowID(screen[CONTROL_SCREEN]))
+		{
+		  if (event.wheel.y > 0)
+		    {
+		      control_scroll += CONTROL_SCROLL_DELTA;
+		      int max_y2 = dim * CONTROL_Y_STEP -
+			SCREEN_HEIGHT[CONTROL_SCREEN];
+		      if (control_scroll > max_y2) control_scroll = max_y2;
+		    }
+		  else if (event.wheel.y < 0)
+		    {
+                      control_scroll -= CONTROL_SCROLL_DELTA;
+                      if (control_scroll < 0) control_scroll = 0;
+		    }
+		}
+	      else if (event.window.windowID ==
+		       SDL_GetWindowID(screen[BRUSH_SCREEN]))
+		{
+		  if (event.wheel.y > 0)
+		    {
+		      selected_color++;
+		      if (selected_color >= 8 &&
+			  brush_color_mode == BRUSH_COLOR_MODE_DIRECT)
+			selected_color = 0;
+		    }
+		  else if (event.wheel.y < 0)
+		    {
+		      selected_color--;
+		      if (selected_color < 0)
+			selected_color =
+			  (brush_color_mode == BRUSH_COLOR_MODE_DIRECT) ? 7 : 0;
+		    }
+		}
 	      refresh_flag = 1;
 	      break;
 	    }

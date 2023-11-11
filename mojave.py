@@ -9,9 +9,9 @@ my_path = os.path.dirname(os.path.abspath(__file__))
 _mojave = cdll.LoadLibrary(my_path + '/_mojave.so')
 
 def _do_mojave(queue, X, cl, window_name, my_path):
-    Xa = np.require(X, dtype = 'float64')
+    Xa = np.require(X, dtype = 'float64', requirements = 'C')
     Xp = Xa.ctypes._as_parameter_
-    cl_a = np.require(cl, dtype = 'int32').copy()
+    cl_a = np.require(np.array(cl).copy(), dtype = 'int32', requirements = 'C')
     cl_p = cl_a.ctypes._as_parameter_
     _mojave.mojave(Xp, cl_p, Xa.shape[0], Xa.shape[1],
                    window_name.encode(), my_path.encode())
@@ -39,6 +39,8 @@ def mojave(X, cl = None, window_name = 'Mojave'):
     >>> cl_out = mojave(D,cl_in)
     """
     X0 = np.array(X)
+    if X0.shape[0] < X0.shape[1]:
+        raise ValueError("Matrix should be taller than wide")
     delta = np.max(X0,0) - np.min(X0,0)
     delta[delta == 0] = 1
     X1 = 2.0 * ((X0 - np.min(X0,0)) / delta) - 1.0

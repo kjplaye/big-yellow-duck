@@ -1,9 +1,10 @@
 import numpy as np
 import scipy.stats
-from data_visualization import ggobi
+from data_visualization import ggobi, mojave
 from math import log
 from matplotlib import pyplot as plt
 from basic_util import col
+from sklearn.decomposition import FastICA
 
 # Regression model using (sqrt(m), sqrt(n), 1) for the max sv
 # of a random (m,n) matrix with iid entries from N(0,1)
@@ -35,10 +36,32 @@ def _pca_bits(m,n,svs):
         zscore_ans.append(zscr0)
     return np.array(ans), mean, np.array(zscore_ans)
 
-class pca:
+class ICA(np.ndarray):
+    def __new__(self, input_array):
+    	"""Make sure to PCA before this call and truncate to desired size.
+
+        Matrix decomposition: 
+            self.M = I @ I.new_V
+        """
+    	FI = FastICA()
+    	sources = FI.fit_transform(np.array(input_array))
+    	obj = np.asarray(sources).view(self)
+    	obj.A = FI.mixing_   	 
+    	return obj
+    def mojave(self, input_clusters = None, dims = 20):
+        if input_clusters is None:
+            return mojave(self[:,:dims])
+        else:
+            return mojave(self[:,:dims], input_clusters)
+
+
+class PCA:
     """PCA
     Let M be a matrix with shape (m,n).  m is the amount of data
-    and n is the number of features.  Usually m > n.
+    and n is the number of features.  Usually m > n. Matrix 
+    decomposition:
+
+        P.M = P.U @ P.D @ P.V
 
     USAGE EXAMPLE
     >>> M = np.random.normal(0,1,[128,400])
@@ -86,14 +109,18 @@ class pca:
     	plt.xlabel("Rank")
     def ggobi(self, input_clusters = None, dims = 20):
     	if input_clusters is None:
-        	return ggobi(self.U[:,:dims])
+            return ggobi(self.U[:,:dims])
     	else:
-        	return ggobi(self.U[:,:dims], input_clusters)
+            return ggobi(self.U[:,:dims], input_clusters)
     def mojave(self, input_clusters = None, dims = 20):
     	if input_clusters is None:
-        	return mojave(self.U[:,:dims])
+            return mojave(self.U[:,:dims])
     	else:
-        	return mojave(self.U[:,:dims], input_clusters)
+            return mojave(self.U[:,:dims], input_clusters)
+    def ica(self, dims):
+        I = ICA(self.U[:,:dims])
+        I.new_V = I.A.T @ (np.diag(self.D) @ self.V)[:len(I.A)]
+        return I
     def __repr__(self, threshold_bits = 20.0):
         mp_thresh = self.get_mp_threshold()
         header = ['ind','MP','PV','sv','zscr','bits']
@@ -106,5 +133,6 @@ class pca:
               "%6.2f" % self.pval[k]] for k in range(min(10,len(self.D)))]
         est_rank = self.estimated_rank()
         LH = [header] + [header_lines] + L
-        begin = f'PCA({self.m}, {self.n})\nestimated rank = {self.estimated_rank()}, mean = {"%6.2f" % self.max_sv_mean}\n\n'
+        begin = f'PCA({self.m}, {self.n})\nestimated rank = ' \
+            f'{self.estimated_rank()}, mean = {"%6.2f" % self.max_sv_mean}\n\n'
         return begin + str(col(LH))
