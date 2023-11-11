@@ -61,7 +61,10 @@
 #define POINT_ZOOM_MULT 1.05
 #define ROTATION_SPEED_MULT 1.05
 #define ZOOM_GROVE_Y 100
+#define SPEED_GROVE_X 440
 #define ZOOM_GROVE_X 480
+#define POINTSIZE_GROVE_X 520
+#define INTENSITY_GROVE_X 560
 #define ZOOM_GROVE_WIDTH 5
 #define ZOOM_GROVE_HEIGHT 400
 #define ZOOM_SLIDER_WIDTH 30
@@ -69,9 +72,6 @@
 #define ZOOM_GROVE_COLOR 0x000000
 #define ZOOM_SLIDER_COLOR 0xffffff
 #define ZOOM_LOG_RATIO 18.0
-#define SPEED_GROVE_X 440
-#define POINTSIZE_GROVE_X 520
-#define INTENSITY_GROVE_X 560
 #define RANDOM_SEED (lrand48())
 #define CONTROL_SCROLL_DELTA 20
 #define CONTROL_SCROLL_DELTA_PAGE 200
@@ -146,7 +146,8 @@ SDL_Surface * text[MAX_TEXT_NUMBER];
 SDL_Surface * text_x;
 SDL_Surface * text_y;
 SDL_Surface * text_r;
-SDL_Surface *text_xy;
+SDL_Surface * text_xy;
+SDL_Surface * text_decimation[3];
 TTF_Font* font;
 char ttf_file[FONT_NUM_LOCATIONS][MAX_STRING] = TTF_FILE_FILES;
 
@@ -192,8 +193,8 @@ int use_color_hash = 0;
 
 // Decimation mode
 int decimation_mode = 0;
-uint32_t decimation_color[MAX_DECIMATION_MODE] = {0x0000ff, 0x00ff00, 0xffff00,
-                                                  0xff0000};
+uint32_t decimation_color[MAX_DECIMATION_MODE] = {0x000080, 0x008000, 0x808000,
+                                                  0x800000};
 int decimation[MAX_DECIMATION_MODE] = {1,10,100,1000};
 
 // brush info
@@ -480,6 +481,13 @@ void draw_controls()
       ROTATION_MODE_BOX_SIZE, ROTATION_MODE_BOX_SIZE,
       decimation_color[decimation_mode]);
 
+  // Decimation text
+  if (decimation_mode)
+    blt_text(CONTROL_SCREEN, text_decimation[decimation_mode - 1],
+	     25 - 10 * decimation_mode + SCREEN_WIDTH[CONTROL_SCREEN] -
+	     ROTATION_MODE_MARGIN_X - ROTATION_MODE_BOX_SIZE + 20,
+	     ROTATION_MODE_MARGIN_Y + 10, 0xffffff);
+  
   // Draw sliders
   draw_slider(ZOOM_LOG_RATIO, zoom_ratio, ZOOM_GROVE_WIDTH, ZOOM_GROVE_HEIGHT,
 	      ZOOM_GROVE_X, ZOOM_GROVE_Y, ZOOM_SLIDER_WIDTH, ZOOM_SLIDER_HEIGHT,
@@ -969,31 +977,41 @@ void set_gamma()
 }
 
 // Move the slides given an (x,y) choice
-void move_sliders(int x, int y)
+void move_sliders(int x, int y, int is_clicking)
 {
-  int middle_grove_x0 = (ZOOM_GROVE_X + SPEED_GROVE_X - 40) / 2;
-  int middle_grove_x = (ZOOM_GROVE_X + SPEED_GROVE_X) / 2;
+  static int active_toggle;
+  int middle_grove_x0 = (SPEED_GROVE_X + ZOOM_GROVE_X) / 2  - 40;
+  int middle_grove_x1 = (SPEED_GROVE_X + ZOOM_GROVE_X) / 2;
   int middle_grove_x2 = (ZOOM_GROVE_X + POINTSIZE_GROVE_X) / 2;
-  int middle_grove_x3 = (ZOOM_GROVE_X + INTENSITY_GROVE_X) / 2;
+  int middle_grove_x3 = (POINTSIZE_GROVE_X + INTENSITY_GROVE_X) / 2;
   double ratio = pow(2, (y - ZOOM_GROVE_Y - ZOOM_GROVE_HEIGHT / 2.0)
 		     / ZOOM_LOG_RATIO);
   double ratio2 = POINTSIZE_DIV * pow(2, (y - ZOOM_GROVE_Y
 					  - ZOOM_GROVE_HEIGHT / 2.0)
 				      / POINTSIZE_LOG_RATIO);
-  if (x < middle_grove_x && x >= middle_grove_x0)
+  if (x >= middle_grove_x0 && x < middle_grove_x1 &&
+      (is_clicking || active_toggle == 1))
     {
+      if (is_clicking) active_toggle = 1;
       rotation_speed = ratio;
       new_rotation_direction(rotation_seed);
     }
-  else if (x < middle_grove_x2 && x > middle_grove_x0)
-    zoom_ratio = ratio;
-  else if (x >= middle_grove_x2 && x < middle_grove_x3)
+  else if (x >= middle_grove_x1 && x < middle_grove_x2 &&
+	   (is_clicking || active_toggle == 2))
     {
+      if (is_clicking) active_toggle = 2;
+      zoom_ratio = ratio;
+    }
+  else if (x >= middle_grove_x2 && x < middle_grove_x3 &&
+	   (is_clicking || active_toggle == 3))
+    {
+      if (is_clicking) active_toggle = 3;
       point_size = ratio2;
       create_point_texture();
     }
-  else if (x >= middle_grove_x3)
+  else if (x >= middle_grove_x3 && (is_clicking || active_toggle == 4))
     {
+      if (is_clicking) active_toggle = 4;
       gamma_correct = ratio;
       set_gamma();
     }
@@ -1026,6 +1044,13 @@ void create_text()
   sprintf(the_text, "x/y");
   text_xy = TTF_RenderText_Solid(font, the_text, white);
   if (text_xy == NULL) ERROR("TTF_RenderText_Solid failure");
+
+  for(int i = 0; i<3 ; i++)
+    {
+      sprintf(the_text, "%d", (int) pow(10, i+1));
+      text_decimation[i] = TTF_RenderText_Solid(font, the_text, white);
+      if (text_decimation[i] == NULL) ERROR("TTF_RenderText_Solid failure");
+    }
 }
 
 void service_box_0_1(int i, int bi)
@@ -1392,7 +1417,7 @@ void service_left_button_on_control(int button_x, int button_y)
     }
   else if (button_y >= ZOOM_GROVE_Y &&
 	   button_y < ZOOM_GROVE_Y + ZOOM_GROVE_HEIGHT)
-      move_sliders(shift_x, button_y);
+    move_sliders(shift_x, button_y, 1);
   else if (button_y >= ROTATION_MODE_MARGIN_Y &&
 	   button_y < ROTATION_MODE_MARGIN_Y +
 	   ROTATION_MODE_BOX_SIZE &&
@@ -1597,6 +1622,10 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		{
 		case SDLK_q:
 		  flag = 0;
+		  break;
+		case SDLK_d:
+		  if (++decimation_mode == MAX_DECIMATION_MODE) decimation_mode = 0;
+		  refresh_flag = 1;
 		  break;
 		case SDLK_x:
 		  for(int i = 0; i < dim; i++)
@@ -1814,7 +1843,7 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		       event.button.y < ZOOM_GROVE_Y + ZOOM_GROVE_HEIGHT &&
 		       event.button.button == SDL_BUTTON_LEFT)
 		{
-		  move_sliders(mouse_x - CONTROL_NUMBER_X, mouse_y);
+		  move_sliders(mouse_x - CONTROL_NUMBER_X, mouse_y, 0);
 		  refresh_flag = 1;
 		}
 	      break;	      
