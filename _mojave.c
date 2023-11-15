@@ -1544,28 +1544,29 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
   SDL_SetRenderDrawColor(renderer[POINT_SCREEN],0,0,0,255);
 
   char image_file[MAX_STRING];
-  sprintf(image_file, "%s/%s", mojave_path, IMAGE_ERASE_FILE);
+  sprintf(image_file, "%s/mojave_files/%s", mojave_path, IMAGE_ERASE_FILE);
   if ((image_erase = SDL_LoadBMP(image_file))==NULL)
     ERROR("SDL_LoadBMP error (erase)");
-  sprintf(image_file, "%s/%s", mojave_path, IMAGE_PALETTE_FILE);
+  sprintf(image_file, "%s/mojave_files/%s", mojave_path, IMAGE_PALETTE_FILE);
   if ((image_palette = SDL_LoadBMP(image_file))==NULL)
     ERROR("SDL_LoadBMP (palette)");
-  sprintf(image_file, "%s/%s", mojave_path, IMAGE_ROTATION_FILE);
+  sprintf(image_file, "%s/mojave_files/%s", mojave_path, IMAGE_ROTATION_FILE);
   if ((image_rotation = SDL_LoadBMP(image_file))==NULL)
     ERROR("SDL_LoadBMP (rotation)");
-  sprintf(image_file, "%s/%s", mojave_path, IMAGE_SLIDER_SPEED_FILE);
+  sprintf(image_file, "%s/mojave_files/%s", mojave_path, IMAGE_SLIDER_SPEED_FILE);
   if ((image_slider_speed = SDL_LoadBMP(image_file))==NULL)
     ERROR("SDL_LoadBMP (slider_speed)");
-  sprintf(image_file, "%s/%s", mojave_path, IMAGE_SLIDER_ZOOM_FILE);
+  sprintf(image_file, "%s/mojave_files/%s", mojave_path, IMAGE_SLIDER_ZOOM_FILE);
   if ((image_slider_zoom = SDL_LoadBMP(image_file))==NULL)
     ERROR("SDL_LoadBMP (slider_zoom)");
-  sprintf(image_file, "%s/%s", mojave_path, IMAGE_SLIDER_POINT_FILE);
+  sprintf(image_file, "%s/mojave_files/%s", mojave_path, IMAGE_SLIDER_POINT_FILE);
   if ((image_slider_point = SDL_LoadBMP(image_file))==NULL)
     ERROR("SDL_LoadBMP (slider_point)");
-  sprintf(image_file, "%s/%s", mojave_path, IMAGE_SLIDER_INTENSITY_FILE);
+  sprintf(image_file, "%s/mojave_files/%s", mojave_path,
+	  IMAGE_SLIDER_INTENSITY_FILE);
   if ((image_slider_intensity = SDL_LoadBMP(image_file))==NULL)
     ERROR("SDL_LoadBMP (slider_intensity)");
-  sprintf(image_file, "%s/%s", mojave_path, IMAGE_CUT_FILE);
+  sprintf(image_file, "%s/mojave_files/%s", mojave_path, IMAGE_CUT_FILE);
   if ((image_cut = SDL_LoadBMP(image_file))==NULL)
     ERROR("SDL_LoadBMP (cut)");
 
