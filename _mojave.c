@@ -1194,6 +1194,7 @@ void undo_save(int num_data, int32_t undo[UNDO_SIZE][num_data],
 
 void color_picker(int * mouse_x, int * mouse_y, double (*data)[dim],
 		  int * color, int num_data)
+//void color_picker(double (*data)[dim], int * color, int num_data)
 {
   double min_dist_sqr = INFINITY;
   unsigned best_color = 0x000000;
@@ -1313,11 +1314,6 @@ void service_mouse_motion_on_point(int mouse_x, int mouse_y, int mouse_state,
 	}		      
       last_mouse_x = mouse_x;
       last_mouse_y = mouse_y;
-    }
-  else
-    {
-      last_mouse_x = -1;
-      last_mouse_y = -1;
     }
 }
 
@@ -1698,11 +1694,13 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		    }
 		  break;
 		case SDLK_o:
-		  SDL_GetMouseState(&mouse_x, &mouse_y);
+		  // @@@@@@
+		  //SDL_GetMouseState(&mouse_x, &mouse_y);
 		  if (event.window.windowID ==
 		      SDL_GetWindowID(screen[POINT_SCREEN]))
 		    {		      
 		      color_picker(&mouse_x, &mouse_y, data, color, num_data);
+		      //color_picker(data, color, num_data);
 		      refresh_flag = 1;
 		    }
 		  break;
