@@ -206,7 +206,8 @@ int imagesc(double * data, long long data_len, long long width, long long frames
 	}
 
       //Event loop
-      if (SDL_WaitEvent(&event))
+      //      if (SDL_WaitEvent(&event))
+      if (SDL_PollEvent(&event))
 	{
 	  switch(event.type)
 	    {
