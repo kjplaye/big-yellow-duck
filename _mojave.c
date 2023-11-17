@@ -1669,6 +1669,9 @@ void mojave(double * data_flat, int32_t * color, int num_data, int dim_in,
 		  SO_clear(A);
 		  rotation_mode = 0;
 		  zoom_ratio = 1.0;
+		  rotation_speed = 1.0;
+		  point_size = DEFAULT_POINT_SIZE;
+		  gamma_correct = 1.0;
 		  refresh_flag = 1;
 		  break;
 		case SDLK_r:
