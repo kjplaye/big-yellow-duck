@@ -1,14 +1,16 @@
 from collections import Counter
-import math
 from cols import transpose, col
-import pickle
-import random
+import math
+import matplotlib.patches as mpatches
 import numpy as np
-import scipy.stats
-import tempfile
-import sys
 import os
 import pickle
+import pickle
+import random
+import scipy.stats
+import sys
+import tempfile
+
 
 def dim(x):
     if isinstance(x,str):
@@ -18,9 +20,12 @@ def dim(x):
     except:
         return 0
 
-def blockup(x,n):
+def blockup(x, n, pad = False, padv = None):
+    if pad:
+    	jag = [x[i:i+n] for i in range(0,len(x),n)]
+    	jag[-1] = list(jag[-1]) + [padv] * (n - len(jag[-1]))
+    	return jag
     return [x[i:i+n] for i in range(0,len(x)-n+1,n)]
-
 
 def rotate(x,n):
     return x[n:] + x[:n]
@@ -148,3 +153,9 @@ def v_pad(L,padn = 5, padv = -1):
 
 def lmap(f,L):
     return list(map(f,L))
+
+def make_patches(colors, labels):
+    """USAGE: make_patches([[0,0,1], [0,1,0], [1,0,0]], ['10 trials', '100 trials', '1000 trials'])"""
+    patch = [mpatches.Patch(color=colors[i], label=labels[i]) for i in range(len(colors))]
+    plt.legend(handles=patch)
+
