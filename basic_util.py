@@ -173,12 +173,14 @@ class Cat(np.ndarray):
         obj.n = cat.categories.nunique()
         return obj
 
-def compose_advice(list_of_arrays):
+def compose_advice(list_of_arrays, array_names = None):
     """
-    >>> compose_advice([[[1,2],[4,5]], [0,1,1,1,0,1,0,0,0,0]])
-    x_0[x_1:]
-    x_0[:x_1]
+    >>> compose_advice([[[[1,2],[4,5]]], [0,1,1,1,0,1,0,0,0,0]], ['count','meow'])
+    count[:meow:]
+    count[::meow]
     """
+    if array_names is None:
+        array_names = [f'x_{i}' for i in range(len(list_of_arrays))]
     L = [np.array(e) for e in list_of_arrays]
     SIZE = [e.max() + 1 for e in L]
     SHAPE = [e.shape for e in L]
@@ -186,5 +188,6 @@ def compose_advice(list_of_arrays):
         for dim in range(len(SHAPE[array_num_1])):
             for array_num_2 in range(len(SIZE)):
                 if SHAPE[array_num_1][dim] == SIZE[array_num_2]:
-                    a = ':'.join([f'x_{array_num_2}' if i==dim else '' for i in range(len(SHAPE[array_num_1]))])
-                    print(f"x_{array_num_1}[{a}]")
+                    a = ':'.join([f'{array_names[array_num_2]}' if i==dim else ''
+                                  for i in range(len(SHAPE[array_num_1]))])
+                    print(f"{array_names[array_num_1]}[{a}]")
