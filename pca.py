@@ -1,10 +1,15 @@
 import numpy as np
 import scipy.stats
-from data_visualization import ggobi, mojave
+from data_visualization import ggobi
 from math import log
 from matplotlib import pyplot as plt
 from basic_util import col
 from sklearn.decomposition import FastICA
+
+try:
+    from mojave import mojave
+except:
+    print("No Mojave")
 
 # Regression model using (sqrt(m), sqrt(n), 1) for the max sv
 # of a random (m,n) matrix with iid entries from N(0,1)
