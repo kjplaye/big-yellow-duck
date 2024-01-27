@@ -93,6 +93,7 @@ class PCA:
     9          27.92  -0.75     0.37
     """
     def __init__(self, M, remove_mean = False):
+        M = np.array(M)
     	self.M = M
     	if remove_mean:
         	self.M -= np.mean(self.M,0)
