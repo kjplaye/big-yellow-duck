@@ -4,6 +4,7 @@ import math
 import matplotlib.patches as mpatches
 import numpy as np
 import os
+import pandas as pd
 import pickle
 import pickle
 import random
@@ -159,3 +160,31 @@ def make_patches(colors, labels):
     patch = [mpatches.Patch(color=colors[i], label=labels[i]) for i in range(len(colors))]
     plt.legend(handles=patch)
 
+class Cat(np.ndarray):
+    def __new__(self, data):
+        cat = pd.Categorical(data)                       
+        series = pd.Series(cat)
+        codes = series.cat.codes
+        obj = np.asarray(codes.values).view(self)
+        obj.cat = cat
+        obj.series = series
+        obj.codes = codes
+        obj.C = cat.categories
+        obj.n = cat.categories.nunique()
+        return obj
+
+def compose_advice(list_of_arrays):
+    """
+    >>> compose_advice([[[1,2],[4,5]], [0,1,1,1,0,1,0,0,0,0]])
+    x_0[x_1:]
+    x_0[:x_1]
+    """
+    L = [np.array(e) for e in list_of_arrays]
+    SIZE = [e.max() + 1 for e in L]
+    SHAPE = [e.shape for e in L]
+    for array_num_1 in range(len(SHAPE)):
+        for dim in range(len(SHAPE[array_num_1])):
+            for array_num_2 in range(len(SIZE)):
+                if SHAPE[array_num_1][dim] == SIZE[array_num_2]:
+                    a = ':'.join([f'x_{array_num_2}' if i==dim else '' for i in range(len(SHAPE[array_num_1]))])
+                    print(f"x_{array_num_1}[{a}]")
