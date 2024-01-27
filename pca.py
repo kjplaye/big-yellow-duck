@@ -94,12 +94,12 @@ class PCA:
     """
     def __init__(self, M, remove_mean = False):
         M = np.array(M)
-    	self.M = M
-    	if remove_mean:
-        	self.M -= np.mean(self.M,0)
-    	[self.U, self.D, self.V] = np.linalg.svd(self.M,0)
-    	[self.m, self.n] = self.M.shape
-    	self.pval, self.max_sv_mean, self.zscore = _pca_bits(self.m, self.n, self.D)
+        self.M = M
+        if remove_mean:
+                self.M -= np.mean(self.M,0)
+        [self.U, self.D, self.V] = np.linalg.svd(self.M,0)
+        [self.m, self.n] = self.M.shape
+        self.pval, self.max_sv_mean, self.zscore = _pca_bits(self.m, self.n, self.D)
     def get_mp_threshold(self):
     	return self.max_sv_mean * np.sum(self.D**2 / (self.m * self.n))**0.5
     def estimated_rank(self, threshold_bits = 20.0, use_mp_thresh = True):
