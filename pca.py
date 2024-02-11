@@ -7,7 +7,7 @@ from basic_util import col
 from sklearn.decomposition import FastICA
 
 try:
-    from mojave import mojave
+    from mojave_eda import mojave
 except:
     print("No Mojave")
 
