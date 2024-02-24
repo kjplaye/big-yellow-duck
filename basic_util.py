@@ -1,10 +1,10 @@
 from collections import Counter
 from cols import transpose, col
+from matplotlib import pyplot as plt
 import math
 import matplotlib.patches as mpatches
 import numpy as np
 import os
-import pandas as pd
 import pickle
 import pickle
 import random
@@ -160,50 +160,6 @@ def make_patches(colors, labels):
     patch = [mpatches.Patch(color=colors[i], label=labels[i]) for i in range(len(colors))]
     plt.legend(handles=patch)
 
-class Cat(np.ndarray):
-    """Expose some pandas functionality to consistently index categorical data.
-    
-    Usage Example:
-    >>> cat = Cat(['a','c','b','a'])
-    >>> print(cat)
-    [0, 2, 1, 0]
-
-    >>> print("Number of categories:", cat.num_cat)
-    Number of categories: 3
-
-    >>> print("Categories:", cat.cat)
-    Categories: Index(['a', 'b', 'c'], dtype='object')
-
-    >>> new_cat = cat.index(['c','a'])
-    >>> print("Pull in new data:", new_cat))
-    >>> print("As a series:")
-    >>> print(new_cat.series)
-    >>> print("Lift to names:", new_cat.lift())
-    Pull in new data: [2 0]
-    As a series:
-    0   c
-    1   a
-    dtype: category
-    Categories (3, object): ['a', 'b', 'c']
-    Lift to names: Index(['c', 'a'], dtype='object')
-    """
-    def __new__(self, data, categories = None):
-        cat = pd.Categorical(data, categories = categories)
-        series = pd.Series(cat)
-        codes = series.cat.codes
-        obj = np.asarray(codes.values).view(self)
-        obj.series = series
-        obj.cat = cat.categories
-        obj.num_cat = obj.cat.nunique()
-        return obj
-    def index(self, data):
-        """Apply Cat indexing to new data."""
-        return Cat(data, categories=self.cat)
-    def lift(self):
-        return self.cat[self]
-    def __hash__(self):
-        return hash((tuple(self), tuple(self.cat)))
-
 def compose_advice(list_of_arrays, array_names = None):
     """
     >>> compose_advice([[[[1,2],[4,5]]], [0,1,1,1,0,1,0,0,0,0]], ['count','meow'])
@@ -222,3 +178,26 @@ def compose_advice(list_of_arrays, array_names = None):
                     a = ':'.join([f'{array_names[array_num_2]}' if i==dim else ''
                                   for i in range(len(SHAPE[array_num_1]))])
                     print(f"{array_names[array_num_1]}[{a}]")
+
+def eq_imshow(X, ticks = 10):
+    X0 = np.array(255 * (X - X.min()) / (X.max() - X.min()), dtype = 'uint8')
+    h,b = np.histogram(X0, 256, [0,256])
+    cdf0 = h.cumsum()
+    cdfm = np.ma.masked_equal(cdf0,0)
+    cdfm = (cdfm - cdfm.min())*255/(cdfm.max()-cdfm.min())
+    cdf = np.ma.filled(cdfm,0).astype('uint8')
+    Y = cdf[X0]
+    plt.imshow(Y)
+    tick_locs = np.arange(0,256,255 / (ticks - 1))
+    tick_vals = []
+    for loc in tick_locs:
+        ind = np.argmax(cdf >= loc)
+        if ind == 0:
+            v = 0
+        else:
+            alpha = (loc - cdf[ind - 1]) / (cdf[ind] - cdf[ind - 1])
+            v = (ind - 1) * alpha + ind * (1 - alpha)
+        tick_vals.append((v / 255) * (X.max() - X.min()) + X.min())
+    cbar = plt.colorbar(ticks = tick_locs)
+    cbar.ax.set_yticklabels(tick_vals)
+
