@@ -1,6 +1,7 @@
 from collections import Counter
 from cols import transpose, col
 from matplotlib import pyplot as plt
+from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 import math
 import matplotlib.patches as mpatches
 import numpy as np
@@ -201,3 +202,23 @@ def eq_imshow(X, ticks = 10):
     cbar = plt.colorbar(ticks = tick_locs)
     cbar.ax.set_yticklabels(tick_vals)
 
+def make_cmap(color_list, power = 1.0, T = 1000):
+    C = np.array(color_list)
+    bands = len(C) - 1
+    out = []
+    for t in range(T):
+        gamma = (t / T) ** power
+        band_ind = int(gamma * bands)
+        alpha = gamma * bands - band_ind
+        out.append((1 - alpha) * C[band_ind] + alpha * C[band_ind+1])
+    return ListedColormap(out)
+
+default_cmap_colors = [
+        [0,0,0,1],
+        [0,0,1,1],
+        [0,1,1,1],
+        [0,1,0,1],
+        [1,1,0,1],
+        [1,0,0,1],
+        [1,1,1,1]]
+default_cmap = make_cmap(default_cmap_colors, 0.7)
