@@ -48,10 +48,12 @@ class Graph():
         """Use PCA on Incidence Matrix."""
         return PCA(self.matrix(return_type = matrix_return_type, directed = directed))
     def dot(self, color = {}, fill_color = {}, edge_color = {},
-        edge_size = {}, comment = 'Dot from Python'):
+            edge_size = {}, comment = 'Dot from Python', ranksep = None):
         def _color_code(color):
             return "#%02x%02x%02x" % tuple((int(255 * color[i]) for i in range(3)))                      
         GV = graphviz.Digraph(comment=comment)
+        if ranksep is not None:
+            GV.graph_attr['ranksep'] = str(ranksep)
         for v in self.vertices:
             c = "#000000" if v not in color else _color_code(color[v])
             fc = "#ffffff" if v not in fill_color else _color_code(fill_color[v])
