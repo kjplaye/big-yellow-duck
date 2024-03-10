@@ -202,6 +202,14 @@ default_cmap_colors = [
 default_cmap = make_cmap(default_cmap_colors, 0.7)
 
 def equalized_imshow(XX, ticks = 10, cmap = None, plot = True):
+    """Equalize and imshow(with colorbar) or return for maybe imagesc.
+
+    Usage Example:
+        >>> import math
+        >>> M = [[math.log(0.0001+abs(math.sin(x*y/100))) for x in range(100)] for y in range(100)]
+	>>> eq = equalized_imshow(M, plot = False)
+	>>> equalized_imshow(M)
+    """
     X = np.array(XX)
     X0 = np.array(255 * (X - X.min()) / (X.max() - X.min()), dtype = 'uint8')
     h,b = np.histogram(X0, 256, [0,256])
