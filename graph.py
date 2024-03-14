@@ -17,6 +17,7 @@ class Graph():
     >>> G.dot(color = {10:(1.0,0.7,0.0)},
             fill_color = {12:(0.5,0.2,0.9)},
             edge_color = {0:(0.2,0.8,0.2)},
+            edge_label = {1:"bark"},
             edge_size = {1:4.0})
     """
     def __init__(self, edges):
@@ -47,7 +48,7 @@ class Graph():
     def spectral(self, matrix_return_type = 'ev', directed = True):
         """Use PCA on Incidence Matrix."""
         return PCA(self.matrix(return_type = matrix_return_type, directed = directed))
-    def dot(self, color = {}, fill_color = {}, edge_color = {},
+    def dot(self, color = {}, fill_color = {}, edge_color = {}, edge_label = {},
             edge_size = {}, comment = 'Dot from Python', ranksep = None):
         def _color_code(color):
             return "#%02x%02x%02x" % tuple((int(255 * color[i]) for i in range(3)))                      
@@ -61,8 +62,9 @@ class Graph():
         for k, e in enumerate(self.edges):
             ec = "#000000" if k not in edge_color else _color_code(edge_color[k])
             es = "1.0" if k not in edge_size else "%f" % edge_size[k]
+            el = "" if k not in edge_label else edge_label[k]
             GV.edge(str(self.vertices[e[0]]),str(self.vertices[e[1]]),
-                    color = ec, penwidth = es)
+                    color = ec, penwidth = es, label = el)
         f = tempfile.NamedTemporaryFile(suffix = '.pdf')
         GV.render(f.name[:-4], view=True)
         print("dot temp file:", f.name)
