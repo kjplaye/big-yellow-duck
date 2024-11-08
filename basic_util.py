@@ -1,9 +1,12 @@
 from collections import Counter
 from cols import transpose, col
+from time import gmtime, strftime
+import ctypes
 import math
 import matplotlib.patches as mpatches
 import numpy as np
 import os
+import pandas as pd
 import pickle
 import pickle
 import random
@@ -158,4 +161,23 @@ def make_patches(colors, labels):
     """USAGE: make_patches([[0,0,1], [0,1,0], [1,0,0]], ['10 trials', '100 trials', '1000 trials'])"""
     patch = [mpatches.Patch(color=colors[i], label=labels[i]) for i in range(len(colors))]
     plt.legend(handles=patch)
+
+def ptr(x):
+    """Short hand to a pointer of the array x for ctypes."""
+    return x.ctypes._as_parameter_
+
+def epoch_time(x):
+    return int(pd.to_datetime(x).timestamp())
+
+
+def human_time(epochtime: int) -> str:
+	"""Convert seconds since the epoch to a human readable string.
+
+	Args:
+    	epochtime: Seconds since the epoch.
+
+	Returns:
+    	A human readible string.
+	"""
+	return strftime('%Y-%m-%d %H-%M-%S', gmtime(epochtime))
 

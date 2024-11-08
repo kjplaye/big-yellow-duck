@@ -7,7 +7,7 @@ import os
 import random
 #import gnuplot
 #TODO update gnuplot --> pylab
-import exceptions
+#import exceptions
 import ossaudiodev
 from ctypes import *
 
