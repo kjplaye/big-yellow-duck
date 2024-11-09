@@ -8,7 +8,6 @@ import matplotlib.patches as Patch
 from ggobi import *
 from imagesc import imagesc
 from matplotlib.colors import ListedColormap
-from mojave import mojave
 from wview import wview
 
 

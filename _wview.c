@@ -366,13 +366,14 @@ void * draw_fft_strip(void * arg)
   double * buffer = param->buffer;
   double * window = param->window;
 
-  i = x * (end - start) / SCREEN_WIDTH + start;
+  i = x * (end - start) / SCREEN_WIDTH + start - window_size / 2;
   for(j=0;j<BUFFER_SIZE;j++) 
     {
-      if (i+j >= size)
+      long k = i + j;
+      if (k<0 || k >= size)
 	small_buffer[j] = 0;
       else
-	small_buffer[j] = buffer[size * frame + i+j];
+	small_buffer[j] = buffer[size * frame + k];
     }
   for(j=0;j<BUFFER_SIZE;j++) fft_vect[x][j] = small_buffer[j] * window[j];
   fft(x);
@@ -381,7 +382,6 @@ void * draw_fft_strip(void * arg)
     {
       j = FREQ2INDEX(y*4000.0/SCREEN_HEIGHT);			
       amp = fft_scale * cabs(fft_vect[x][j]);
-      i = x * (end - start) / SCREEN_WIDTH + start; 
       
       if (amp >= COLOR_THRESH) amp = 255 - (255*COLOR_THRESH - COLOR_THRESH*COLOR_THRESH)/amp; 
       switch(color_scheme)

@@ -1,6 +1,8 @@
 from collections import Counter
 from cols import transpose, col
 from time import gmtime, strftime
+from matplotlib import pyplot as plt
+from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 import ctypes
 import math
 import matplotlib.patches as mpatches
@@ -181,3 +183,78 @@ def human_time(epochtime: int) -> str:
 	"""
 	return strftime('%Y-%m-%d %H-%M-%S', gmtime(epochtime))
 
+def compose_advice(list_of_arrays, array_names = None):
+    """
+    >>> compose_advice([[[[1,2],[4,5]]], [0,1,1,1,0,1,0,0,0,0]], ['count','meow'])
+    count[:meow:]
+    count[::meow]
+    """
+    if array_names is None:
+        array_names = [f'x_{i}' for i in range(len(list_of_arrays))]
+    L = [np.array(e) for e in list_of_arrays]
+    SIZE = [e.max() + 1 for e in L]
+    SHAPE = [e.shape for e in L]
+    for array_num_1 in range(len(SHAPE)):
+        for dim in range(len(SHAPE[array_num_1])):
+            for array_num_2 in range(len(SIZE)):
+                if SHAPE[array_num_1][dim] == SIZE[array_num_2]:
+                    a = ':'.join([f'{array_names[array_num_2]}' if i==dim else ''
+                                  for i in range(len(SHAPE[array_num_1]))])
+                    print(f"{array_names[array_num_1]}[{a}]")
+                    
+def make_cmap(color_list, power = 1.0, T = 1000):
+    C = np.array(color_list)
+    bands = len(C) - 1
+    out = []
+    for t in range(T):
+        gamma = (t / T) ** power
+        band_ind = int(gamma * bands)
+        alpha = gamma * bands - band_ind
+        out.append((1 - alpha) * C[band_ind] + alpha * C[band_ind+1])
+    return ListedColormap(out)
+
+default_cmap_colors = [
+        [0,0,0,1],
+        [0,0,1,1],
+        [0,1,1,1],
+        [0,1,0,1],
+        [1,1,0,1],
+        [1,0,0,1],
+        [1,1,1,1]]
+default_cmap = make_cmap(default_cmap_colors, 0.7)
+
+def equalized_imshow(XX, ticks = 10, cmap = None, plot = True):
+    """Equalize and imshow(with colorbar) or return for maybe imagesc.
+
+    Usage Example:
+        >>> import math
+        >>> M = [[math.log(0.0001+abs(math.sin(x*y/100))) for x in range(100)] for y in range(100)]
+	>>> eq = equalized_imshow(M, plot = False)
+	>>> equalized_imshow(M)
+    """
+    X = np.array(XX)
+    X0 = np.array(255 * (X - X.min()) / (X.max() - X.min()), dtype = 'uint8')
+    h,b = np.histogram(X0, 256, [0,256])
+    cdf0 = h.cumsum()
+    cdfm = np.ma.masked_equal(cdf0,0)
+    cdfm = (cdfm - cdfm.min())*255/(cdfm.max()-cdfm.min())
+    cdf = np.ma.filled(cdfm,0).astype('uint8')
+    Y = cdf[X0]
+    if not plot:
+        return Y
+    if cmap:
+        plt.imshow(Y, cmap = cmap)
+    else:
+        plt.imshow(Y)
+    tick_locs = np.arange(0,256,255 / (ticks - 1))
+    tick_vals = []
+    for loc in tick_locs:
+        ind = np.argmax(cdf >= loc)
+        if ind == 0:
+            v = 0
+        else:
+            alpha = (loc - cdf[ind - 1]) / (cdf[ind] - cdf[ind - 1])
+            v = (ind - 1) * alpha + ind * (1 - alpha)
+        tick_vals.append((v / 255) * (X.max() - X.min()) + X.min())
+    cbar = plt.colorbar(ticks = tick_locs)
+    cbar.ax.set_yticklabels(tick_vals)

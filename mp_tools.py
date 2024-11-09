@@ -12,10 +12,7 @@ def _mp_mapper(pair):
 
 
 def mp_dr(f, inputs):
-    """Multiprocessing dereference.  Mainly useful for functions with multiple inputs.
-    Entries in inputs that are tuples will derefernce to f arguments, other types will
-    act as single inputs.  
-    
+
     USAGE_EXAMPLE:
     >>> def f(x,y):
     >>> 	return x+y
@@ -50,3 +47,6 @@ def vmap(f, inputs, num_cores = 1, verbose = True):
     	return list(tmap(p,*MPDR))
     else:
     	return p.map(*MPDR)
+    function_input_pairs = [[f, inp] for inp in inputs]
+    return (_mp_mapper, function_input_pairs)
+

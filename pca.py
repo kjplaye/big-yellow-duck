@@ -1,10 +1,15 @@
 import numpy as np
 import scipy.stats
-from data_visualization import ggobi, mojave
+from data_visualization import ggobi
 from math import log
 from matplotlib import pyplot as plt
 from basic_util import col
 from sklearn.decomposition import FastICA
+
+try:
+    from mojave_eda import mojave
+except:
+    print("No Mojave")
 
 # Regression model using (sqrt(m), sqrt(n), 1) for the max sv
 # of a random (m,n) matrix with iid entries from N(0,1)
@@ -88,12 +93,13 @@ class PCA:
     9          27.92  -0.75     0.37
     """
     def __init__(self, M, remove_mean = False):
-    	self.M = M
-    	if remove_mean:
-        	self.M -= np.mean(self.M,0)
-    	[self.U, self.D, self.V] = np.linalg.svd(self.M,0)
-    	[self.m, self.n] = self.M.shape
-    	self.pval, self.max_sv_mean, self.zscore = _pca_bits(self.m, self.n, self.D)
+        M = np.array(M)
+        self.M = M
+        if remove_mean:
+                self.M -= np.mean(self.M,0)
+        [self.U, self.D, self.V] = np.linalg.svd(self.M,0)
+        [self.m, self.n] = self.M.shape
+        self.pval, self.max_sv_mean, self.zscore = _pca_bits(self.m, self.n, self.D)
     def get_mp_threshold(self):
     	return self.max_sv_mean * np.sum(self.D**2 / (self.m * self.n))**0.5
     def estimated_rank(self, threshold_bits = 20.0, use_mp_thresh = True):
