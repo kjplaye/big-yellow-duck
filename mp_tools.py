@@ -12,7 +12,7 @@ def _mp_mapper(pair):
 
 
 def mp_dr(f, inputs):
-
+    """
     USAGE_EXAMPLE:
     >>> def f(x,y):
     >>> 	return x+y
@@ -22,6 +22,7 @@ def mp_dr(f, inputs):
     """
     function_input_pairs = [[f, inp if isinstance(inp, tuple) else (inp,)] for inp in inputs]
     return (_mp_mapper, function_input_pairs)
+    
 
 
 def vmap(f, inputs, num_cores = 1, verbose = True):
@@ -37,16 +38,17 @@ def vmap(f, inputs, num_cores = 1, verbose = True):
     """
     MPDR = mp_dr(f, inputs)
     if num_cores == 1:
-    if verbose:
-    	return list(tqdm(map(*MPDR), total = len(inputs)))
+        if verbose:
+    	    return list(tqdm(map(*MPDR), total = len(inputs),
+                        leave = False))
+        else:
+    	    return list(map(*MPDR))
     else:
-    	return list(map(*MPDR))
-    else:
-    p = mp.Pool(num_cores)
-    if verbose:
-    	return list(tmap(p,*MPDR))
-    else:
-    	return p.map(*MPDR)
-    function_input_pairs = [[f, inp] for inp in inputs]
+        p = mp.Pool(num_cores)
+        if verbose:
+    	    return list(tmap(p,*MPDR))
+        else:
+    	    return p.map(*MPDR)
+    unction_input_pairs = [[f, inp] for inp in inputs]
     return (_mp_mapper, function_input_pairs)
 
