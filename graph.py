@@ -65,7 +65,7 @@ class Graph():
             el = "" if k not in edge_label else edge_label[k]
             GV.edge(str(self.vertices[e[0]]),str(self.vertices[e[1]]),
                     color = ec, penwidth = es, label = el)
-        f = tempfile.NamedTemporaryFile(suffix = '.pdf')
+        f = tempfile.NamedTemporaryFile(suffix = f'_{comment}.pdf')
         GV.render(f.name[:-4], view=True)
         print("dot temp file:", f.name)
         input("Press key to continue...")
