@@ -58,6 +58,9 @@ def sortby(x,L):
     E = sorted([[x[i],L[i]] for i in range(len(x))],cmp = lambda a,b: 1-2*(a[1] < b[1]))
     return([e[0] for e in E])
 
+def double_sortby(A, x):
+	return np.array(sortby(np.array(sortby(A,x)).T,x)).T
+
 def shuffle_it(x):
     y = x[:]
     random.shuffle(y)
