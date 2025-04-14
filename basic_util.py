@@ -261,3 +261,34 @@ def equalized_imshow(XX, ticks = 10, cmap = None, plot = True):
         tick_vals.append((v / 255) * (X.max() - X.min()) + X.min())
     cbar = plt.colorbar(ticks = tick_locs)
     cbar.ax.set_yticklabels(tick_vals)
+
+    
+def group_map(func, input_dict):
+        """
+        Apply func to input dictionary values to get a new dictionary.
+
+        Args:
+        func: A function which takes a iterable to another iterable, 
+              for instance, a list of ints to a list of strings.
+        input_dict: A dictionary where the values are lists.
+
+        Usage Example:
+        >>> group_map(lambda x:[str(e) for e in x], 
+        >>>           {'a' : [1,2,3], 'b' : [4,5]})
+        {'a': ['1', '2', '3'], 'b': ['4', '5']}
+        """
+        # Flatten to lists.
+        key_list = list(input_dict.keys())
+        input_list = sum([input_dict[k] for k in key_list],[])
+
+        # Map.
+        output_list = func(input_list)
+
+        # Group.
+        index = 0
+        output_dict = {}
+        for k in key_list:
+            length = len(input_dict[k])
+            output_dict[k] = output_list[index : index + length]
+            index += length
+        return output_dict
