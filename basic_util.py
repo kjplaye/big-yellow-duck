@@ -159,6 +159,20 @@ def h_pad(L,padn = 5, padv = -1):
 def v_pad(L,padn = 5, padv = -1):
   return h_pad([e.T for e in L],padn = padn, padv = padv).T
 
+def pad(x, dim = 0, padn = 1, padv = 0):
+    # Usage example
+    # >>> x = np.array([[1,2,3],[4,5,6]])
+    # >>> pad([x,x,x])
+    pad_shape = list(np.array(x[0]).shape)
+    pad_shape[dim] = padn
+    pad_array = np.full(pad_shape, padv)
+    L = []
+    for e in x[:-1]:
+        L.append(e)
+        L.append(pad_array)
+    L.append(x[-1])    
+    return np.concatenate(L, dim)
+
 def lmap(f,L):
     return list(map(f,L))
 
